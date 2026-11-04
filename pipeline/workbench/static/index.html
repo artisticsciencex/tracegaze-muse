@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NEON Gaze–Object Workbench</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:#111418;color:#dfe5ec;font:14px/1.5 system-ui,sans-serif}
+.wrap{max-width:1000px;margin:0 auto;padding:20px}
+h1{font-size:21px;margin:0 0 2px}
+h1 small{color:#8a94a3;font-weight:400;font-size:13px}
+.sub{color:#8a94a3;font-size:13px;margin-bottom:6px}
+.flow{display:flex;gap:10px;align-items:stretch;flex-wrap:wrap;margin-top:16px}
+.card{background:#191e24;border:1px solid #2a323c;border-radius:11px;
+  padding:14px;flex:1 1 290px;min-width:280px;display:flex;flex-direction:column}
+.card.ready{border-color:#2b5c3f}
+.card.busy{border-color:#7a6320}
+.card.failed,.card.port_conflict{border-color:#6e2c2c}
+.arrow{align-self:center;color:#5c6672;font-size:22px;padding:0 2px}
+h3{margin:0 0 4px;font-size:15px}
+.desc{color:#9aa5b1;font-size:12.5px;min-height:52px}
+.io{font-size:12px;color:#8a94a3;margin-top:8px;border-top:1px solid #262d36;padding-top:8px}
+.io b{color:#c3ccd7;font-weight:500}
+.art{font-family:ui-monospace,monospace;font-size:11.5px;color:#7fb0f2;
+  word-break:break-all;margin-top:3px}
+.pill{display:inline-block;font-size:11.5px;border-radius:9px;padding:1px 9px;
+  border:1px solid #3a4450;color:#9aa5b1}
+.pill.ready{color:#5ad17a;border-color:#2b5c3f}
+.pill.busy{color:#e5c15e;border-color:#7a6320}
+.pill.starting{color:#7fb0f2;border-color:#2f5a92}
+.pill.failed,.pill.port_conflict{color:#ff7d7d;border-color:#6e2c2c}
+.detail{font-size:11.5px;color:#8a94a3;margin-top:5px;white-space:pre-wrap}
+.detail.err{color:#ffb4b4}
+.btns{display:flex;gap:7px;flex-wrap:wrap;margin-top:auto;padding-top:12px}
+button,a.btn{background:#242b34;color:#dfe5ec;border:1px solid #38424e;border-radius:7px;
+  padding:6px 12px;cursor:pointer;font:inherit;text-decoration:none;display:inline-block}
+button:hover,a.btn:hover{background:#2c3540}
+button:disabled{opacity:.4;cursor:default}
+button.primary,a.btn.primary{background:#2f6fd6;border-color:#2f6fd6;color:#fff}
+button.primary:hover,a.btn.primary:hover{background:#3d7de2}
+button.small{padding:4px 9px;font-size:12px}
+.foot{margin-top:18px;color:#8a94a3;font-size:12.5px}
+.logbox{background:#0d1116;border:1px solid #2a323c;border-radius:8px;padding:9px;
+  font-family:ui-monospace,monospace;font-size:11.5px;color:#9aa5b1;
+  max-height:190px;overflow:auto;white-space:pre-wrap;margin-top:9px}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>NEON Gaze–Object Workbench <small>trim → track → fuse</small></h1>
+  <div class="sub">One page for the whole pipeline. Each stage runs as its own
+    local server; this page starts them, reuses them, and passes validated
+    artifacts along. Navigation stays in this tab.</div>
+
+  <div class="flow" id="flow"></div>
+
+  <div class="foot">
+    <span id="rootsLine"></span>
+    <div class="btns" style="margin-top:8px">
+      <button class="small" id="refreshBtn">Refresh status</button>
+      <button class="small" id="logsBtn">Show launch diagnostics</button>
+    </div>
+    <div class="logbox hidden" id="logs"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let MODULES=[], BUSYKEY=null;
+
+async function refresh(){
+  try{
+    const r=await fetch("/api/modules");
+    const d=await r.json();
+    MODULES=d.modules; render();
+  }catch(e){ $("flow").innerHTML=`<div class="card failed">workbench unreachable: ${esc(e)}</div>`; }
+}
+
+function shortPath(p){
+  if(!p) return "";
+  const parts=p.split("/");
+  return parts.length>2 ? "…/"+parts.slice(-2).join("/") : p;
+}
+
+function render(){
+  const cards=MODULES.map((m,i)=>{
+    const st=m.status;
+    const running=(st==="ready"||st==="busy");
+    const openLabel=running?"Open":"Start and open";
+    const nextKey=m.next_stage;
+    const nextLabel={object_tracking:"Continue to object tracking",
+                     gaze_object_fusion:"Continue to gaze fusion",
+                     home:"Open latest result"}[nextKey]||"";
+    // the artifact this stage's Continue button would hand to the next stage
+    const handoff=m.output_artifact;
+    const canContinue=!!handoff;
+    const contHref=nextKey==="home"
+      ? "/result"                       // open the produced demo video
+      : `/go?to=${nextKey}&handoff=${encodeURIComponent(handoff||"")}`;
+    const busyNote=st==="busy"?" — a job is running":"";
+    return `<div class="card ${esc(st)}">
+      <h3>${esc(m.title)}</h3>
+      <div><span class="pill ${esc(st)}">${esc(st)}${esc(busyNote)}</span>
+        <span class="pill">port ${m.port}</span></div>
+      <div class="desc" style="margin-top:8px">${esc(m.description)}</div>
+      <div class="io"><b>in</b> ${esc(m.input_desc)}
+        ${m.input_artifact?`<div class="art" title="${esc(m.input_artifact)}">${esc(shortPath(m.input_artifact))}</div>`:""}
+        <div style="margin-top:6px"><b>out</b> ${esc(m.output_desc)}</div>
+        ${m.output_artifact?`<div class="art" title="${esc(m.output_artifact)}">${esc(shortPath(m.output_artifact))}</div>`:""}
+      </div>
+      <div class="detail ${(st==="failed"||st==="port_conflict")?"err":""}">${esc(m.detail||"")}${m.error&&m.error!==m.detail?"\n"+esc(m.error):""}</div>
+      <div class="btns">
+        <button class="primary" data-act="open" data-key="${esc(m.key)}">${esc(openLabel)}</button>
+        ${canContinue?`<a class="btn" href="${contHref}">${esc(nextLabel)}</a>`:""}
+        ${m.owned?`<button class="small" data-act="stop" data-key="${esc(m.key)}">Stop</button>`:""}
+      </div>
+    </div>`;
+  });
+  $("flow").innerHTML=cards.join('<div class="arrow">→</div>');
+  $("flow").querySelectorAll("button[data-act]").forEach(b=>{
+    b.onclick=()=>b.dataset.act==="open"?openModule(b.dataset.key):stopModule(b.dataset.key);
+  });
+}
+
+async function openModule(key){
+  const m=MODULES.find(x=>x.key===key);
+  const card=$("flow");
+  if(BUSYKEY) return;
+  BUSYKEY=key;
+  const btn=card.querySelector(`button[data-act="open"][data-key="${key}"]`);
+  if(btn){btn.disabled=true;btn.textContent="Starting…";}
+  try{
+    const r=await fetch("/api/start",{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({key})});
+    const d=await r.json();
+    if(!r.ok){ BUSYKEY=null; await refresh();
+      alert("Could not start "+key+":\n\n"+(d.detail||r.status)); return; }
+    // same-tab navigation, carrying the workbench home url + known input
+    const inp=d.input_artifact;
+    let url=d.url+"?home="+encodeURIComponent(location.origin+"/");
+    if(inp) url="/go?to="+encodeURIComponent(key)+"&handoff="+encodeURIComponent(inp);
+    location.href=url;
+  }catch(e){ BUSYKEY=null; alert("Could not start "+key+": "+e); await refresh(); }
+}
+
+async function stopModule(key){
+  const m=MODULES.find(x=>x.key===key);
+  if(m && m.status==="busy" &&
+     !confirm(key+" reports an ACTIVE JOB. Stopping now aborts it. Stop anyway?"))
+    return;
+  const r=await fetch("/api/stop",{method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({key,force:m&&m.status==="busy"})});
+  if(!r.ok){ const d=await r.json(); alert("Stop refused:\n\n"+(d.detail||r.status)); }
+  refresh();
+}
+
+$("refreshBtn").onclick=refresh;
+$("logsBtn").onclick=async()=>{
+  const box=$("logs");
+  if(!box.classList.contains("hidden")){box.classList.add("hidden");return;}
+  const parts=[];
+  for(const m of MODULES){
+    const r=await fetch("/api/logs/"+m.key);
+    const d=await r.json();
+    parts.push(`── ${m.key} ──\n`+(d.lines.length?d.lines.join("\n"):"(nothing launched by the workbench yet)"));
+  }
+  box.textContent=parts.join("\n\n");
+  box.classList.remove("hidden");
+};
+
+fetch("/api/config").then(r=>r.json()).then(c=>{
+  $("rootsLine").textContent="browse roots: "+c.roots.join(", ")
+    +"  ·  workbench v"+c.version;
+});
+refresh();
+setInterval(()=>{ if(!BUSYKEY) refresh(); }, 4000);
+</script>
+</body>
+</html>

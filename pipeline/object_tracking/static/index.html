@@ -1,0 +1,1697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Object Tracking — SAM3 gaze pipeline</title>
+<style>
+  :root {
+    --bg:#14161a; --card:#1d2026; --edge:#2c3038; --fg:#e8eaed; --dim:#9aa0a8;
+    --acc:#4da3ff; --ok:#3fbf6f; --warn:#e0a63c; --err:#e05c5c; --sel:#2a4a6e;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  .wrap { max-width:1400px; margin:0 auto; padding:16px 20px 60px; }
+  h1 { font-size:19px; margin:4px 0 12px; font-weight:650; }
+  h1 small { color:var(--dim); font-weight:400; font-size:13px; margin-left:10px; }
+  h3 { font-size:14px; margin:0 0 8px; }
+  .card { background:var(--card); border:1px solid var(--edge); border-radius:10px;
+          padding:13px 15px; margin-bottom:12px; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  input[type=text], input[type=number] { background:#111318; color:var(--fg);
+          border:1px solid var(--edge); border-radius:6px; padding:7px 9px;
+          font:13px ui-monospace,Menlo,monospace; }
+  input[type=text] { flex:1; min-width:200px; }
+  input[type=text][readonly] { color:var(--dim); }
+  button { background:#262b33; color:var(--fg); border:1px solid var(--edge);
+           border-radius:6px; padding:6px 12px; cursor:pointer; font-size:13px; }
+  button:hover:not(:disabled) { border-color:var(--acc); }
+  button:disabled { opacity:.45; cursor:default; }
+  button.primary { background:var(--acc); border-color:var(--acc); color:#08121f; font-weight:600; }
+  button.good { border-color:var(--ok); color:var(--ok); }
+  button.danger { border-color:var(--err); color:var(--err); }
+  button.small { padding:2px 8px; font-size:11.5px; }
+  .meta { color:var(--dim); font-size:12.5px; margin-top:6px; }
+  .meta b { color:var(--fg); }
+  .banner { border-radius:7px; padding:8px 12px; margin-top:8px; font-size:13px;
+            white-space:pre-wrap; }
+  .banner.ok { background:#15301f; border:1px solid #24593a; color:#9fdcb5; }
+  .banner.err { background:#33191b; border:1px solid #5e2a2e; color:#f0a8a8; }
+  .banner.warn { background:#33290f; border:1px solid #5e4c1e; color:#eccf8f; }
+  .hidden { display:none !important; }
+  .badge { font-size:10.5px; padding:1px 8px; border-radius:9px; white-space:nowrap;
+           border:1px solid var(--edge); color:var(--dim); }
+  .badge.ready { border-color:#24593a; color:#9fdcb5; background:#15301f; }
+  .badge.prep  { border-color:#5e4c1e; color:#eccf8f; background:#33290f; }
+  .badge.tracked { border-color:#4a5d7e; color:#a9c6f0; background:#1c2a40; }
+  .badge.videoonly { border-color:#5e2a2e; color:#f0a8a8; background:#33191b; }
+
+  /* workspace layout */
+  .work { display:grid; grid-template-columns: 1fr 330px; gap:12px; }
+  .videobox { position:relative; background:#000; border-radius:8px; overflow:hidden; }
+  video { width:100%; display:block; }
+  #stillCanvas, #overlayCanvas, #pointsCanvas { position:absolute; left:0; top:0;
+    width:100%; height:100%; pointer-events:none; }
+  #stillCanvas { display:none; }
+  #stillCanvas.exact { display:block; }
+  #pointsCanvas.annotating { pointer-events:auto; cursor:crosshair; }
+  #seekIndicator { position:absolute; top:8px; left:8px; z-index:5;
+    background:rgba(20,22,26,.85); border:1px solid var(--warn);
+    color:var(--warn); border-radius:6px; padding:3px 10px; font-size:12px; }
+  #frameStateBar { font:12px ui-monospace,Menlo,monospace; margin-top:5px; }
+  #frameStateBar .ok { color:var(--ok); } #frameStateBar .bad { color:var(--err); }
+  .transport { display:flex; gap:6px; align-items:center; margin-top:8px; flex-wrap:wrap; }
+  .transport .readout { margin-left:auto; font:12.5px ui-monospace,Menlo,monospace; color:var(--dim); }
+  .transport .readout b { color:var(--fg); }
+  .tl { position:relative; height:26px; margin-top:8px; cursor:pointer; }
+  .tl-track { position:absolute; inset:6px 0; background:#0e1013;
+              border:1px solid var(--edge); border-radius:4px; }
+  .tl-play { position:absolute; top:2px; width:2px; height:22px; background:#ff6b6b; }
+  .tl-ref { position:absolute; top:4px; width:2px; height:18px; background:#e0a63c; opacity:.8; }
+  .presence { margin-top:8px; }
+  .presence .prow { display:flex; align-items:center; gap:8px; height:16px; margin:2px 0; }
+  .presence .plabel { width:130px; font-size:11px; color:var(--dim); overflow:hidden;
+                      text-overflow:ellipsis; white-space:nowrap; text-align:right; }
+  .presence .pbar { position:relative; flex:1; height:10px; background:#0e1013;
+                    border-radius:3px; overflow:hidden; }
+  .presence .pspan { position:absolute; top:0; height:100%; opacity:.85; }
+  .objlist { display:flex; flex-direction:column; gap:8px; max-height:520px; overflow-y:auto; }
+  .obj { border:1px solid var(--edge); border-radius:8px; padding:8px 10px; background:#171a1f; }
+  .obj.sel { border-color:var(--acc); }
+  .obj .head { display:flex; gap:8px; align-items:center; }
+  .obj .chip { width:14px; height:14px; border-radius:4px; flex:none; }
+  .obj .nm { font-weight:600; flex:1; overflow:hidden; text-overflow:ellipsis; }
+  .obj .id { color:var(--dim); font:11px ui-monospace,monospace; }
+  .obj .acts { display:flex; gap:5px; flex-wrap:wrap; margin-top:7px; }
+  .obj .info { color:var(--dim); font-size:11.5px; margin-top:5px; white-space:pre-wrap; }
+  .kbd { color:var(--dim); font-size:11.5px; margin-top:6px; }
+  .kbd b { background:#262b33; border:1px solid var(--edge); border-radius:4px;
+           padding:0 5px; font:11px ui-monospace,monospace; color:var(--fg); }
+  .prog { height:9px; background:#0e1013; border:1px solid var(--edge);
+          border-radius:5px; overflow:hidden; margin-top:8px; }
+  .prog > div { height:100%; width:0%; background:var(--acc); transition:width .3s; }
+  pre.result { background:#111318; border:1px solid var(--edge); border-radius:7px;
+               padding:9px 11px; font-size:11.5px; overflow-x:auto; max-height:260px; }
+  label.chk { color:var(--dim); font-size:12.5px; cursor:pointer; user-select:none; }
+  .steps { display:flex; gap:6px; margin-bottom:12px; align-items:center; }
+  .step { padding:4px 12px; border-radius:14px; border:1px solid var(--edge);
+          color:var(--dim); font-size:12px; background:none; cursor:pointer; }
+  .step.on { border-color:var(--acc); color:var(--fg); background:#1c2a40; }
+  .step.done { border-color:#24593a; color:#9fdcb5; }
+  .step:disabled { opacity:.4; cursor:default; }
+
+  /* modal (folder chooser) */
+  .modal-back { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:40;
+                display:flex; align-items:center; justify-content:center; }
+  .modal { width:min(920px,94vw); max-height:86vh; display:flex; flex-direction:column;
+           background:var(--card); border:1px solid var(--edge); border-radius:12px; }
+  .modal-head { display:flex; align-items:center; padding:11px 16px;
+                border-bottom:1px solid var(--edge); font-weight:650; }
+  .modal-head button { margin-left:auto; }
+  .crumbs { display:flex; flex-wrap:wrap; gap:4px; padding:7px 16px;
+            border-bottom:1px solid var(--edge); font-size:12.5px; align-items:center; }
+  .crumbs a { color:var(--acc); cursor:pointer; padding:2px 4px; border-radius:4px; }
+  .crumbs a:hover { background:#262b33; }
+  .crumbs .sep { color:var(--dim); } .crumbs .cur { font-weight:600; }
+  .modal-body { display:flex; min-height:250px; max-height:52vh; }
+  .entry-list { flex:1.25; overflow-y:auto; padding:6px; outline:none; }
+  .entry { display:flex; align-items:center; gap:8px; padding:6px 10px;
+           border-radius:6px; cursor:pointer; font-size:13px; }
+  .entry:hover { background:#23272e; } .entry.hi { background:var(--sel); }
+  .entry .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .entry.dim, .entry.file { color:var(--dim); }
+  .list-msg { color:var(--dim); padding:16px 14px; font-size:13px; }
+  .inspect-pane { flex:1; border-left:1px solid var(--edge); overflow-y:auto;
+                  padding:11px 14px; font-size:12.5px; }
+  .ins-grid { display:grid; grid-template-columns:auto 1fr; gap:3px 12px; }
+  .ins-grid .k { color:var(--dim); white-space:nowrap; }
+  .ins-grid .v { font:12px ui-monospace,monospace; word-break:break-all; }
+  .ins-problems { color:#f0a8a8; margin-top:8px; white-space:pre-wrap; }
+  .recents { padding:8px 16px; border-top:1px solid var(--edge); display:flex;
+             gap:6px; flex-wrap:wrap; align-items:center; }
+  .chipbtn { font-size:12px; padding:3px 10px; border-radius:12px; cursor:pointer;
+          border:1px solid var(--edge); background:#171a1f; color:var(--fg);
+          max-width:270px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .chipbtn:hover { border-color:var(--acc); } .chipbtn.dead { opacity:.4; cursor:default; }
+  .modal-foot { display:flex; gap:10px; padding:10px 16px; align-items:center;
+                border-top:1px solid var(--edge); }
+  .modal-status { color:var(--dim); font-size:12.5px; flex:1; white-space:pre-wrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="wbBar" style="margin-bottom:10px">
+    <a id="pipelineHome" href="http://127.0.0.1:8000/"
+       style="text-decoration:none;border:1px solid #38424e;border-radius:7px;
+              padding:5px 11px;font-size:13px;display:inline-block">← Pipeline Home</a>
+    <a id="wbNext" class="hidden" href="#"
+       style="text-decoration:none;border:1px solid #2f6fd6;background:#2f6fd6;
+              color:#fff;border-radius:7px;padding:5px 11px;font-size:13px;
+              display:inline-block;margin-left:6px">Continue to gaze fusion →</a>
+  </div>
+  <h1>Object Tracking <small>select · name · mask · track · review · publish — SAM3 stage of the gaze pipeline</small></h1>
+  <div class="steps" id="stepper">
+    <button class="step on" data-step="1" id="step1">1 · Select objects</button>
+    <button class="step" data-step="2" id="step2">2 · Track objects</button>
+    <button class="step" data-step="3" id="step3">3 · Review</button>
+    <button class="step" data-step="4" id="step4">4 · Export</button>
+    <label class="chk" style="margin-left:auto"><input type="checkbox" id="advancedChk"> show advanced controls</label>
+  </div>
+  <div class="card hidden" id="guidanceCard"><div class="row">
+    <span id="guidanceText" style="flex:1;font-size:14px"></span>
+    <button class="primary hidden" id="guidanceBtn"></button>
+  </div></div>
+
+  <!-- STEP 1 -->
+  <div class="card" id="loadCard">
+    <div class="row">
+      <button class="primary" id="chooseRecBtn">Choose recording folder</button>
+      <input type="text" id="dirInput" readonly placeholder="no recording selected — trimmed artifact, CSV export, prepared or native NEON folder, or plain video">
+    </div>
+    <div class="meta" id="loadMeta"></div>
+    <div id="loadBanner"></div>
+    <div id="nativePanel" class="hidden"></div>
+  </div>
+
+  <!-- STEP 2/3 workspace -->
+  <div class="work hidden" id="workspace">
+    <div>
+      <div class="card">
+        <div class="videobox" id="videobox">
+          <video id="vid" playsinline preload="auto" muted></video>
+          <canvas id="stillCanvas"></canvas>
+          <canvas id="overlayCanvas"></canvas>
+          <canvas id="pointsCanvas"></canvas>
+          <div id="seekIndicator" class="hidden"></div>
+        </div>
+        <div class="transport">
+          <button id="prevF">⏮ frame</button>
+          <button id="playBtn">▶ play</button>
+          <button id="nextF">frame ⏭</button>
+          <input type="number" id="frameInput" min="0" style="width:90px" title="go to frame">
+          <select id="speedSel" title="playback speed">
+            <option value="0.25">0.25×</option><option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option><option value="2">2×</option>
+          </select>
+          <label class="chk">mask opacity <input type="range" id="opacity" min="0" max="100" value="55" style="width:90px"></label>
+          <label class="chk"><input type="checkbox" id="debugChk"> debug</label>
+          <span class="readout" id="readout">–</span>
+        </div>
+        <div id="frameStateBar" class="meta"></div>
+        <pre id="debugPanel" class="result hidden" style="margin-top:6px"></pre>
+        <div class="tl" id="tl"><div class="tl-track"></div><div class="tl-play" id="tlPlay"></div></div>
+        <div class="presence" id="presence"></div>
+        <div class="kbd"><b>←</b>/<b>→</b> frame step · <b>space</b> play/pause ·
+          annotating: <b>click</b> positive · <b>right-click / shift+click</b> negative ·
+          drag a rectangle → its center becomes a movable positive point (the point, not the box, is the SAM3 prompt) ·
+          drag existing points to move them</div>
+      </div>
+
+      <div class="card" id="trackCard">
+        <h3 id="trackTitle">Track objects</h3>
+        <div class="meta" id="playModeHint"></div>
+        <div class="row" style="margin-top:8px">
+          <button class="primary" id="trackBtn" disabled>Track ready objects</button>
+          <button class="danger hidden" id="trackCancelBtn">Cancel</button>
+          <span class="meta" id="estimate"></span>
+        </div>
+        <div class="prog hidden" id="trackProg"><div id="trackProgBar"></div></div>
+        <div class="meta" id="trackPhase"></div>
+        <div id="trackBanner"></div>
+        <div class="row hidden advanced-only" style="margin-top:8px">
+          <button id="workerBtn">Start SAM3 worker</button>
+          <button id="workerStopBtn">Stop worker</button>
+          <span class="badge" id="workerBadge">worker: off</span>
+          <span class="meta" id="gpuMeta"></span>
+        </div>
+      </div>
+
+      <div class="card hidden" id="reviewCard">
+        <h3>Review results</h3>
+        <div class="meta">Play the video to check whether each colored mask
+          follows its object. Untick an object to exclude it from the export;
+          use “rerun object” on its card to redo a bad track.</div>
+        <div class="row" style="margin-top:8px">
+          <label class="chk"><input type="checkbox" id="showMasksChk" checked> show tracked masks</label>
+          <label class="chk"><input type="checkbox" id="showPointsChk"> show prompt points</label>
+        </div>
+        <div id="includeList" style="margin-top:8px"></div>
+        <div class="row" style="margin-top:10px">
+          <button class="primary" id="approveBtn">Approve all included tracks</button>
+          <span class="meta" id="approveNote"></span>
+        </div>
+        <div id="reviewBanner"></div>
+      </div>
+
+      <div class="card" id="publishCard">
+        <h3>Export</h3>
+        <div class="meta" id="exportGuide"></div>
+        <div class="row">
+          <button id="chooseOutBtn">Choose output location</button>
+          <input type="text" id="outName" spellcheck="false" style="max-width:340px">
+          <label class="chk"><input type="checkbox" id="overlayChk" checked> render QA overlay (time-faithful, with audio)</label>
+        </div>
+        <div class="meta">Destination: <b id="outResolved">–</b></div>
+        <div id="outWarn"></div>
+        <div class="row" style="margin-top:8px">
+          <button class="primary" id="publishBtn">Export tracked objects</button>
+          <button class="hidden good" id="gazeFusionBtn" title="next pipeline stage">Continue to gaze fusion →</button>
+        </div>
+        <div class="prog hidden" id="pubProg"><div id="pubProgBar"></div></div>
+        <div class="meta" id="pubPhase"></div>
+        <div id="pubBanner"></div>
+        <div id="pubResult"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h3>Objects <span class="meta" id="objCount"></span></h3>
+        <div class="row">
+          <input type="text" id="newName" placeholder="name, e.g. pipette" style="min-width:120px">
+          <button class="primary" id="newObjBtn">+ Add new object at frame 0</button>
+        </div>
+        <div class="meta">open vocabulary — any name; unique per recording; the ID and color never change</div>
+        <div id="refIndicator" class="hidden" style="margin-top:8px;padding:6px 10px;
+             border:1px solid #2f6fd6;border-radius:7px;background:#16243a;font-size:13px"></div>
+        <div id="refMismatch" class="hidden" style="margin-top:8px;padding:10px;
+             border:1px solid #7a6320;border-radius:8px;background:#241f10;font-size:13px"></div>
+        <div id="objBanner"></div>
+        <div class="objlist" id="objlist" style="margin-top:8px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- folder chooser modal -->
+<div class="modal-back hidden" id="modalBack">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head"><span id="modalTitle">Choose folder</span>
+      <button id="modalClose">✕ close</button></div>
+    <nav class="crumbs" id="crumbs"></nav>
+    <div class="modal-body">
+      <div class="entry-list" id="entryList" role="listbox" tabindex="0"></div>
+      <div class="inspect-pane" id="inspectPane"></div>
+    </div>
+    <div class="recents hidden" id="recentsRow"></div>
+    <div class="modal-foot">
+      <span class="modal-status" id="modalStatus"></span>
+      <button class="primary" id="modalSelect" disabled>Select</button>
+    </div>
+  </div>
+</div>
+
+<script src="/framesync.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const vid = $("vid");
+let FS = null;                 // FrameSync — the presentation-truth machine
+let videoToken = "";
+const HAS_RVFC = "requestVideoFrameCallback" in HTMLVideoElement.prototype;
+
+let R = null, pts = [], N = 0, DUR = 0, worldT0 = null, worldRel = null;
+let OBJS = [], selId = null, draftRect = null, dragPoint = null;
+let workerReady = false, trackJob = null, pubJob = null;
+let outParent = null, outNameDirty = false;
+let reviewData = null;
+const maskCache = new Map();      // frame -> [{object_id,color,mask_rle,...}]
+const hiddenObjects = new Set();
+let maskFetchInFlight = new Set();
+
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function banner(el,cls,txt){el.innerHTML=txt?`<div class="banner ${cls}">${esc(txt)}</div>`:"";}
+async function jfetch(url,opts){
+  const r=await fetch(url,opts);
+  if(!r.ok){let d;try{d=await r.json();}catch{d=null;}
+    const msg=d&&d.detail?(typeof d.detail==="string"?d.detail:(d.detail.message||JSON.stringify(d.detail))):r.statusText;
+    const e=new Error(msg);e.detail=d&&d.detail;throw e;}
+  return r.json();
+}
+function frameForTime(t){if(t<=0)return 0;let lo=0,hi=N-1;
+  while(lo<hi){const m=(lo+hi+1)>>1;(pts[m]<=t)?lo=m:hi=m-1;}return lo;}
+function boundary(i){return (i+1<N)?pts[i+1]:DUR;}
+function seekTime(i){const g=boundary(i)-pts[i];
+  return Math.min(pts[i]+Math.max(0.004,g*0.3),Math.max(0,DUR-0.001));}
+// displayedFrame is the ONLY sanctioned "current frame" (presentation truth)
+function displayedFrame(){return FS && FS.displayedFrame !== null ? FS.displayedFrame : 0;}
+
+// ---------------- COCO RLE decode (pycocotools string encoding) ----------
+function rleFromString(s){
+  const cnts=[];let p=0;
+  while(p<s.length){
+    let x=0,k=0,more=1;
+    while(more){const c=s.charCodeAt(p)-48;x|=(c&0x1f)<<(5*k);more=c&0x20;p++;k++;
+      if(!more&&(c&0x10))x|=(-1)<<(5*k);}
+    if(cnts.length>2)x+=cnts[cnts.length-2];
+    cnts.push(x);
+  }
+  return cnts;
+}
+function paintMask(ctx,rleJson,colorHex,W,H,alpha){
+  const rle=typeof rleJson==="string"?JSON.parse(rleJson):rleJson;
+  const [h,w]=rle.size;
+  const counts=rleFromString(rle.counts);
+  const img=ctx.getImageData(0,0,W,H);
+  const data=img.data;
+  const r=parseInt(colorHex.slice(1,3),16),g=parseInt(colorHex.slice(3,5),16),
+        b=parseInt(colorHex.slice(5,7),16);
+  let idx=0,val=0;
+  for(const c of counts){
+    if(val){
+      for(let k=0;k<c;k++){
+        const pos=idx+k, col=(pos/h)|0, row=pos%h;   // fortran order
+        const off=(row*w+col)*4;
+        data[off]=r;data[off+1]=g;data[off+2]=b;
+        data[off+3]=Math.max(data[off+3],Math.round(alpha*255));
+      }
+    }
+    idx+=c;val=1-val;
+  }
+  ctx.putImageData(img,0,0);
+}
+
+// ---------------- folder chooser (shared modal) ---------------------------
+const modal={mode:null,path:null,listing:null,hi:-1,reqSeq:0,inspSeq:0};
+let NROOTS=1, KIND_LABELS={};
+// chooser gate + badge styling come from the SERVER's authoritative kind
+// sets (object_tracking.intake). A local allow-list here is what made
+// valid Project Aria artifacts unselectable — never reintroduce one.
+let CHOOSER_KINDS=[], KIND_BADGE_CLASS={};
+jfetch("/api/config").then(d=>{NROOTS=d.roots.length;KIND_LABELS=d.kind_labels;
+  CHOOSER_KINDS=d.chooser_kinds||[];KIND_BADGE_CLASS=d.kind_badge_class||{};
+  if(modal.mode)refreshSelectable();
+  $("gpuMeta").textContent=d.gpu_ok?("GPU: "+d.gpu_detail.split(";")[0]):"⚠ no GPU detected";
+  if(!d.local_patch_present)banner($("loadBanner"),"err","⚠ SAM3 LOCAL PATCH missing — tracking will fail (see pipeline/README.md §6)");
+}).catch(()=>{});
+
+$("chooseRecBtn").onclick=()=>openModal("rec");
+$("chooseOutBtn").onclick=()=>openModal("out");
+$("modalClose").onclick=closeModal;
+$("modalBack").addEventListener("pointerdown",e=>{if(e.target===$("modalBack"))closeModal();});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&modal.mode)closeModal();});
+
+function badgeFor(kind){
+  if(!kind)return "";
+  const cls=KIND_BADGE_CLASS[kind]||"";
+  return `<span class="badge ${cls}">${esc(KIND_LABELS[kind]||kind)}</span>`;
+}
+function openModal(mode){
+  modal.mode=mode;
+  $("modalTitle").textContent=mode==="rec"?"Choose recording folder":"Choose output location (parent folder)";
+  $("modalSelect").textContent=mode==="rec"?"Select this folder":"Use this folder as output location";
+  $("modalBack").classList.remove("hidden");
+  $("inspectPane").style.display=mode==="rec"?"":"none";
+  $("inspectPane").innerHTML="<div class='list-msg'>highlight a folder to inspect it</div>";
+  loadRecents();
+  const start=mode==="out"?(outParent||(R&&R.last_out_parent)||(R?parentOf(R.dir):"")):(localStorage.getItem("objtrack_browse")||"");
+  browseTo(start||"");
+  setTimeout(()=>$("entryList").focus(),50);
+}
+function closeModal(){$("modalBack").classList.add("hidden");modal.mode=null;}
+function parentOf(p){return p.replace(/\/[^/]+\/?$/,"")||"/";}
+
+async function loadRecents(){
+  const row=$("recentsRow");
+  if(modal.mode!=="rec"){row.classList.add("hidden");return;}
+  try{
+    const d=await jfetch("/api/recents");
+    if(!d.recents.length){row.classList.add("hidden");return;}
+    row.classList.remove("hidden");
+    row.innerHTML="<span class='meta'>recent:</span>"+d.recents.map(r=>
+      `<button class="chipbtn ${r.usable?"":"dead"}" data-path="${esc(r.path)}"
+        ${r.usable?"":"disabled"} title="${esc(r.path)}">${esc(r.name)}</button>`).join("");
+    row.querySelectorAll(".chipbtn:not(.dead)").forEach(ch=>
+      ch.onclick=()=>{closeModal();loadRec(ch.dataset.path);});
+  }catch{row.classList.add("hidden");}
+}
+
+async function browseTo(path){
+  const seq=++modal.reqSeq;
+  modal.hi=-1;$("modalSelect").disabled=true;
+  $("entryList").innerHTML="<div class='list-msg'>loading…</div>";
+  let d;
+  try{d=await jfetch("/api/browse"+(path?"?path="+encodeURIComponent(path):""));}
+  catch(e){
+    if(seq!==modal.reqSeq)return;
+    modal.listing=null;modal.path=null;
+    if(path&&path===localStorage.getItem("objtrack_browse"))localStorage.removeItem("objtrack_browse");
+    $("entryList").innerHTML=`<div class='list-msg'>⚠ ${esc(e.message)}</div>`;
+    renderCrumbs(null);updateModalFoot();return;
+  }
+  if(seq!==modal.reqSeq)return;
+  modal.inspSeq++;
+  modal.path=d.path;modal.listing=d;
+  if(d.path&&modal.mode==="rec")localStorage.setItem("objtrack_browse",d.path);
+  renderCrumbs(d);renderEntries(d);updateModalFoot();
+  if(modal.mode==="rec"&&d.path)inspectPath(d.path,true);
+}
+function renderCrumbs(d){
+  const c=$("crumbs");
+  if(!d||!d.breadcrumbs||!d.breadcrumbs.length){
+    c.innerHTML="<a tabindex='0'>⬑ browse roots</a>";
+    c.querySelector("a").onclick=()=>browseTo("");return;
+  }
+  const parts=[];
+  d.breadcrumbs.forEach((b,i)=>{
+    if(i)parts.push("<span class='sep'>/</span>");
+    parts.push(i===d.breadcrumbs.length-1?`<span class="cur">${esc(b.name)}</span>`
+      :`<a tabindex="0" data-path="${esc(b.path)}">${esc(b.name)}</a>`);
+  });
+  if(d.parent)parts.unshift(`<a tabindex="0" data-path="${esc(d.parent)}">⬑ up</a><span class="sep">·</span>`);
+  else if(d.path&&NROOTS>1)parts.unshift(`<a tabindex="0" data-path="">⬑ roots</a><span class="sep">·</span>`);
+  c.innerHTML=parts.join("");
+  c.querySelectorAll("a").forEach(a=>{a.onclick=()=>browseTo(a.dataset.path);});
+}
+function renderEntries(d){
+  const list=$("entryList");
+  if(d.error){list.innerHTML=`<div class='list-msg'>⚠ ${esc(d.error)}</div>`;return;}
+  const dirs=d.entries.filter(e=>e.is_dir);
+  if(!dirs.length){list.innerHTML="<div class='list-msg'>no subfolders here</div>";return;}
+  list.innerHTML=dirs.map((e,i)=>`
+    <div class="entry ${e.inaccessible?"dim":""}" id="ent${i}" data-i="${i}" data-path="${esc(e.path)}">
+      <span>${e.inaccessible?"🔒":"📁"}</span><span class="nm">${esc(e.name)}</span>
+      ${badgeFor(e.kind)}
+    </div>`).join("");
+  list.querySelectorAll(".entry[data-i]").forEach(el=>{
+    el.onclick=()=>highlight(+el.dataset.i);
+    el.ondblclick=()=>browseTo(el.dataset.path);
+  });
+}
+function dirEntries(){return (modal.listing&&modal.listing.entries||[]).filter(e=>e.is_dir);}
+function highlight(i){
+  const ents=dirEntries();if(!ents.length)return;
+  modal.hi=Math.max(0,Math.min(i,ents.length-1));
+  document.querySelectorAll(".entry.hi").forEach(el=>el.classList.remove("hi"));
+  const el=document.getElementById("ent"+modal.hi);
+  if(el){el.classList.add("hi");el.scrollIntoView({block:"nearest"});}
+  updateModalFoot();
+  if(modal.mode==="rec")inspectPath(ents[modal.hi].path,false);
+}
+function selectable(kind){return !!kind && CHOOSER_KINDS.includes(kind);}
+function refreshSelectable(){ if(modal.mode) updateModalFoot(); }
+function updateModalFoot(){
+  const ents=dirEntries(),t=modal.hi>=0?ents[modal.hi]:null;
+  if(modal.mode==="out"){
+    $("modalSelect").disabled=!modal.path;
+    $("modalStatus").textContent=modal.path?("output will be created inside: "+modal.path):"";
+    return;
+  }
+  if(t&&selectable(t.kind)){$("modalSelect").disabled=false;
+    $("modalStatus").textContent="selected: "+t.name+" ("+(KIND_LABELS[t.kind]||t.kind)+")";}
+  else if(!t&&modal.listing&&selectable(modal.listing.curKind)){
+    $("modalSelect").disabled=false;
+    $("modalStatus").textContent="this folder: "+(KIND_LABELS[modal.listing.curKind]||"");}
+  else{$("modalSelect").disabled=true;
+    $("modalStatus").textContent=t?(t.inaccessible?"not readable":"not a supported input — double-click to open"):"highlight a folder, or navigate deeper";}
+}
+$("modalSelect").onclick=()=>{
+  if(modal.mode==="out"){outParent=modal.path;closeModal();refreshOutDest();return;}
+  const ents=dirEntries(),t=modal.hi>=0?ents[modal.hi]:null;
+  const target=t&&selectable(t.kind)?t.path:(modal.listing&&selectable(modal.listing.curKind)?modal.path:null);
+  if(target){closeModal();loadRec(target);}
+};
+let inspTimer=null;
+function inspectPath(path,isCur){
+  clearTimeout(inspTimer);
+  const seq=++modal.inspSeq;
+  inspTimer=setTimeout(async()=>{
+    if(seq!==modal.inspSeq)return;
+    const pane=$("inspectPane");
+    pane.innerHTML="<div class='list-msg'>inspecting…</div>";
+    let d;
+    try{d=await jfetch("/api/inspect?path="+encodeURIComponent(path));}
+    catch(e){if(seq===modal.inspSeq)pane.innerHTML=`<div class='list-msg'>⚠ ${esc(e.message)}</div>`;return;}
+    if(seq!==modal.inspSeq)return;
+    if(isCur&&modal.listing){modal.listing.curKind=d.kind;updateModalFoot();}
+    renderInspect(pane,d);
+  },200);
+}
+function renderInspect(pane,d){
+  let html=`<h4 style="margin:0 0 6px">${esc(d.path.split("/").pop())}</h4>${badgeFor(d.kind)}`;
+  if(d.source_system==="project_aria"&&d.aria&&d.aria.artifact_type){
+    // Aria artifacts are described in their OWN terms — no wearer, no NEON
+    // gaze offset, no NEON world time
+    const a=d.aria;
+    html+=`<div class="ins-grid" style="margin-top:8px">
+      <span class="k">artifact</span><span class="v">${esc(a.artifact_type)}</span>
+      <span class="k">artifact id</span><span class="v">${esc((a.artifact_id||"").slice(0,12))}…</span>
+      <span class="k">source</span><span class="v">${esc(a.source_system)}</span>
+      <span class="k">dataset</span><span class="v">${esc(a.dataset||"—")}</span>
+      <span class="k">recording id</span><span class="v">${esc(a.recording_id||"—")}</span>
+      <span class="k">video</span><span class="v">${esc(a.files?a.files.video:"—")}</span>
+      <span class="k">resolution</span><span class="v">${a.width||"?"}×${a.height||"?"}</span>
+      <span class="k">frames</span><span class="v">${a.n_frames??"?"}</span>
+      <span class="k">world rows</span><span class="v">${a.world_rows??"—"}</span>
+      <span class="k">gaze rows</span><span class="v">${a.gaze_rows??"—"}</span>
+      <span class="k">gaze model</span><span class="v">${esc(a.gaze_model||"—")}</span>
+      <span class="k">timestamps</span><span class="v">${esc(a.timestamp_domain||"—")}</span>
+      <span class="k">validation</span><span class="v">${a.validation_ok?"✓ all ok":"⚠ not ok"} (${a.validation_checks??0})</span>
+      <span class="k">audio</span><span class="v">${a.audio_present?"present":"not preserved"}</span></div>
+      <div class="meta" style="margin-top:8px">${esc(a.not_applicable_note||"")}</div>`;
+    if(d.problems&&d.problems.length)
+      html+=`<div class="meta" style="margin-top:8px;color:#ffb4b4">${esc(d.problems.join("\n"))}</div>`;
+    pane.innerHTML=html; return;
+  }
+  if(d.needs_preparation&&d.aria){
+    const a=d.aria;
+    html+=`<div class="ins-grid" style="margin-top:8px">
+      <span class="k">dataset</span><span class="v">${esc(a.dataset||"—")}</span>
+      <span class="k">recording id</span><span class="v">${esc(a.recording_id||"—")}</span>
+      <span class="k">layout</span><span class="v">${esc(a.layout||"—")}</span></div>
+      <div class="meta" style="margin-top:8px">${esc((d.problems||[]).join("\n"))}</div>`;
+    pane.innerHTML=html; return;
+  }
+  if(d.native){
+    const n=d.native;
+    html+=`<div class="ins-grid" style="margin-top:8px">
+      <span class="k">recording id</span><span class="v">${esc((n.recording_id||"").slice(0,13))}…</span>
+      <span class="k">wearer</span><span class="v">${esc(n.wearer_name||"—")}</span>
+      <span class="k">duration</span><span class="v">${n.duration?(n.duration/1e9).toFixed(3)+" s":"?"}</span>
+      <span class="k">gaze offset</span><span class="v">${esc(JSON.stringify(n.gaze_offset))}</span>
+      <span class="k">streams</span><span class="v">${n.streams.length} files</span></div>
+      <div class="meta" style="margin-top:8px">${esc(n.explanation)}</div>`;
+  }else if(d.inspection){
+    const b=d.inspection.bundle;
+    if(b){html+=`<div class="ins-grid" style="margin-top:8px">
+      <span class="k">video</span><span class="v">${esc((b.video_path||"").split("/").pop())}</span>
+      <span class="k">duration</span><span class="v">${b.duration_s!=null?b.duration_s.toFixed(2)+" s":"?"}</span>
+      <span class="k">resolution</span><span class="v">${b.width||"?"}×${b.height||"?"}</span>
+      <span class="k">frames (hdr)</span><span class="v">${b.header_frame_count??"?"}</span>
+      <span class="k">world rows</span><span class="v">${b.world_rows??"—"}</span>
+      <span class="k">gaze rows</span><span class="v">${b.gaze_rows??"—"}</span></div>`;}
+    if(d.inspection.problems.length)
+      html+=`<div class="ins-problems">${esc(d.inspection.problems.join("\n"))}</div>`;
+    if(d.inspection.child_recordings.length)
+      html+="<div style='margin-top:8px'><b>recordings inside:</b></div>"+
+        d.inspection.child_recordings.slice(0,10).map(c=>
+          `<button class="chipbtn" style="margin-top:5px" data-path="${esc(c.path)}">${esc(c.name)}</button>`).join(" ");
+  }else if(d.tracked){
+    html+=`<div class="meta" style="margin-top:8px">tracked artifact ${esc(d.tracked.artifact_id.slice(0,12))}…<br>objects: ${esc(d.tracked.objects.join(", "))}</div>`;
+  }
+  pane.innerHTML=html;
+  pane.querySelectorAll(".chipbtn").forEach(ch=>ch.onclick=()=>{closeModal();loadRec(ch.dataset.path);});
+}
+$("entryList").addEventListener("keydown",e=>{
+  const ents=dirEntries();
+  if(e.key==="ArrowDown"){e.preventDefault();highlight(modal.hi+1);}
+  else if(e.key==="ArrowUp"){e.preventDefault();highlight(modal.hi-1);}
+  else if(e.key==="Enter"){e.preventDefault();
+    const t=modal.hi>=0?ents[modal.hi]:null;if(!t)return;
+    if(modal.mode==="rec"&&selectable(t.kind)){closeModal();loadRec(t.path);}
+    else browseTo(t.path);}
+  else if(e.key==="Backspace"){e.preventDefault();
+    if(modal.listing&&modal.listing.parent)browseTo(modal.listing.parent);
+    else if(modal.listing&&modal.listing.path&&NROOTS>1)browseTo("");}
+});
+
+// ---------------- load recording -----------------------------------------
+async function loadRec(dir){
+  banner($("loadBanner"),"","");$("nativePanel").classList.add("hidden");
+  $("loadMeta").textContent="inspecting…";
+  // native recordings get the preparation panel instead of a direct load
+  let insp;
+  try{insp=await jfetch("/api/inspect?path="+encodeURIComponent(dir));}
+  catch(e){$("loadMeta").textContent="";banner($("loadBanner"),"err",e.message);return;}
+  if(insp.kind==="native_recording"){showNativePanel(dir,insp.native);return;}
+  $("loadMeta").textContent="loading (probe + sync validation)…";
+  try{
+    R=await jfetch("/api/load",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({dir})});
+  }catch(e){
+    $("loadMeta").textContent="";
+    let msg="Load failed: "+e.message;
+    banner($("loadBanner"),"err",msg);return;
+  }
+  $("dirInput").value=R.dir;
+  pts=R.pts_s;N=pts.length;DUR=R.duration_s;
+  worldT0=R.world_t0_ns?BigInt(R.world_t0_ns):null;
+  worldRel=R.world_rel_ns;
+  OBJS=R.objects||[];selId=null;workerReady=false;
+  outParent=R.last_out_parent||parentOf(R.dir);outNameDirty=false;
+  invalidateMasks();hiddenObjects.clear();reviewData=null;previewMask=null;
+  // sever any previous recording's job UI so its pollers cannot repaint
+  trackJob=null;pubJob=null;
+  banner($("trackBanner"),"","");$("trackPhase").textContent="";
+  $("trackProg").classList.add("hidden");$("trackProgBar").style.width="0%";
+  $("trackCancelBtn").classList.add("hidden");
+  banner($("pubBanner"),"","");$("pubResult").innerHTML="";
+  $("pubPhase").textContent="";$("pubProg").classList.add("hidden");
+  $("pubProgBar").style.width="0%";$("publishBtn").disabled=false;
+  $("gazeFusionBtn").classList.add("hidden");$("presence").innerHTML="";
+  banner($("objBanner"),"","");
+  $("loadMeta").innerHTML=
+    `<b>${esc(R.video)}</b> — ${R.width}×${R.height}, <b>${R.n_frames}</b> frames, `+
+    `${R.duration_s.toFixed(3)}s${R.has_audio?", audio":""} · `+
+    `<b>${esc(R.source_type_label)}</b>`+
+    (R.recording_id?` · rec ${esc(R.recording_id.slice(0,8))}…`:"")+
+    (R.wearer_name?` · wearer <b>${esc(R.wearer_name)}</b>`:"")+
+    (R.gaze_rows!=null?` · gaze rows <b>${R.gaze_rows}</b>`:"")+
+    (R.parent_artifact&&R.parent_artifact.artifact_id?` · parent ${esc(String(R.parent_artifact.artifact_id).slice(0,10))}…`:"");
+  banner($("loadBanner"),R.sync_ok?"ok":(R.source_type==="video_only"?"warn":"err"),
+    (R.sync_ok?"✓ ":"⚠ ")+R.sync_status+
+    (R.gaze_compatible?"":"\n⚠ NOT gaze-compatible — tracking allowed, but the published artifact will record gaze_compatible=false"));
+  if(R.warnings&&R.warnings.length)
+    $("loadBanner").innerHTML+=`<div class="banner warn">${esc(R.warnings.join("\n"))}</div>`;
+  vid.src="/api/video?dir="+encodeURIComponent(R.dir);
+  $("workspace").classList.remove("hidden");
+  $("step2").classList.add("on");
+  $("frameInput").max=N-1;
+  videoToken=R.video_token||"";
+  reviewConfirmedThisSession=false;
+  includeSet.clear();
+  initFrameSync();
+  renderObjects();refreshOutDest();updateWorkerUI(false);
+  vid.addEventListener("loadedmetadata",()=>{
+    resizeCanvases();
+    FS.requestFrame(0);          // first exact commit; masks arrive with it
+  },{once:true});
+  // recording already has tracked objects (e.g. page reload): restore review
+  if(OBJS.some(o=>o.track)){loadReview();renderIncludeList();}
+  // objects already approved in a previous session = review was confirmed
+  if(OBJS.some(o=>o.status==="accepted"))reviewConfirmedThisSession=true;
+  renderStep();
+}
+
+// server-loss watch: distinguishes "the server died" from an ambiguous
+// tracking failure, and reconnects the session automatically when it returns
+let serverLost=false;
+setInterval(async()=>{
+  if(!R)return;
+  try{
+    await jfetch("/api/health");
+    if(serverLost){
+      serverLost=false;
+      banner($("loadBanner"),"warn","server reconnected — restoring the session…");
+      await loadRec(R.dir);           // rebuilds the server-side session
+    }
+  }catch{
+    if(!serverLost){
+      serverLost=true;
+      banner($("loadBanner"),"err","⚠ GUI SERVER LOST — tracking state is safe on disk (SQLite store + annotations). Waiting to reconnect…\nIf a track was mid-flight it can be recovered or rerun after reconnect.");
+    }
+  }
+},5000);
+
+
+// ================= guided workflow engine =================================
+// Internal states stay rigorous (draft/mask_accepted/tracked/accepted/...):
+// this layer only decides WHICH step the user is on and what the one
+// obvious next action is.
+let reviewConfirmedThisSession=false;
+const includeSet=new Set();      // review inclusion (default: all tracked)
+
+function currentStep(){
+  if(!R)return 1;
+  if(approvedObjs().length&&(reviewConfirmedThisSession||!trackedObjs().some(o=>o.status==="tracked")))return 4;
+  if(trackedObjs().length)return 3;
+  if(trackable().length)return 2;
+  return 1;
+}
+function renderStep(){
+  if(!R)return;
+  const cur=currentStep();
+  const reach={1:true,2:trackable().length>0||trackedObjs().length>0||approvedObjs().length>0,
+               3:trackedObjs().length>0||approvedObjs().length>0,
+               4:approvedObjs().length>0};
+  for(let s=1;s<=4;s++){
+    const el=$("step"+s);
+    el.classList.toggle("on",s===cur);
+    el.classList.toggle("done",s<cur);
+    el.disabled=!reach[s];
+    const names={1:"Select objects",2:"Track objects",3:"Review",4:"Export"};
+    el.textContent=`${s} · ${names[s]}${s<cur?" ✓":s===cur?"  ←":""}`;
+  }
+  // card visibility per step (advanced shows everything)
+  const adv=$("advancedChk").checked;
+  // a rerun object that was re-accepted must keep the track action reachable
+  // even while other objects are already in review/export
+  $("trackCard").classList.toggle("hidden",
+    !(cur===2||adv||trackJob||trackable().length>0));
+  $("reviewCard").classList.toggle("hidden",!(cur===3||(cur===4&&adv)));
+  $("publishCard").classList.toggle("hidden",!(cur===4||adv));
+  document.querySelectorAll(".advanced-only").forEach(el=>el.classList.toggle("hidden",!adv));
+  renderGuidance(cur);
+  renderPlayModeHint(cur);
+  renderExportGuide(cur);
+}
+$("advancedChk").onchange=()=>renderStep();
+
+function renderGuidance(cur){
+  const g=$("guidanceCard"),txt=$("guidanceText"),btn=$("guidanceBtn");
+  g.classList.remove("hidden");btn.classList.add("hidden");btn.onclick=null;
+  const nReady=trackable().length,nTracked=trackedObjs().length,
+        nApproved=approvedObjs().length,nInc=includeCount();
+  if(cur===1){
+    txt.textContent=OBJS.filter(o=>!o.deleted).length
+      ?"Step 1 — for each object: add points on its reference frame, preview the mask, then click “Use this selection”."
+      :"Step 1 — seek to a clear frame, name your first object, and click “+ New object”.";
+    if(nReady){txt.textContent=`${nReady} object${nReady>1?"s are":" is"} ready. Track ${nReady>1?"them":"it"} now?`;
+      btn.textContent=`Track ${nReady} ready object${nReady>1?"s":""}`;btn.classList.remove("hidden");
+      btn.onclick=()=>{$("trackCard").scrollIntoView({behavior:"smooth"});$("trackBtn").click();};}
+  }else if(cur===2){
+    txt.textContent=`${nReady} object${nReady>1?"s are":" is"} ready. Track ${nReady>1?"them":"it"} now?`;
+    btn.textContent=`Track ${nReady} ready object${nReady>1?"s":""}`;btn.classList.remove("hidden");
+    btn.onclick=()=>$("trackBtn").click();
+  }else if(cur===3){
+    if(nReady){
+      txt.textContent=`${nReady} object${nReady>1?"s are":" is"} re-selected and ready. Track ${nReady>1?"them":"it"} now, then review and approve.`;
+      btn.textContent=`Track ${nReady} ready object${nReady>1?"s":""}`;btn.classList.remove("hidden");
+      btn.onclick=()=>$("trackBtn").click();
+    }else{
+      txt.textContent="Tracking finished. Press Play — each colored mask should follow its object. Untick anything wrong (or rerun it), then approve.";
+      btn.textContent=`Approve ${nInc} included track${nInc===1?"":"s"}`;
+      if(nInc){btn.classList.remove("hidden");btn.onclick=()=>$("approveBtn").click();}
+    }
+  }else{
+    if(nReady){
+      txt.textContent=`${nReady} object${nReady>1?"s are":" is"} re-selected and ready. Track ${nReady>1?"them":"it"} now, then review and approve.`;
+      btn.textContent=`Track ${nReady} ready object${nReady>1?"s":""}`;btn.classList.remove("hidden");
+      btn.onclick=()=>$("trackBtn").click();
+    }else{
+      txt.textContent=`${nApproved} object${nApproved>1?"s":""} approved. Export is ready.`;
+      btn.textContent="Export tracked objects";btn.classList.remove("hidden");
+      btn.onclick=()=>{$("publishCard").scrollIntoView({behavior:"smooth"});};
+    }
+  }
+}
+function renderPlayModeHint(cur){
+  $("playModeHint").textContent = cur<3
+    ?"Preview video — prompt points appear only on reference frames. Moving masks are not available yet (tracking has not run)."
+    :"Review tracking — colored masks should follow objects during playback.";
+}
+function renderExportGuide(cur){
+  const el=$("exportGuide");if(!el)return;
+  const nInc=includeCount(),nApproved=approvedObjs().length;
+  if(!trackedObjs().length&&!nApproved)el.textContent="Select and track at least one object first.";
+  else if(!nApproved&&!reviewConfirmedThisSession)el.textContent="Review the tracked masks before exporting.";
+  else if(!nApproved)el.textContent="Choose at least one tracked object to include.";
+  else el.textContent=`${nApproved} object${nApproved>1?"s":""} will be included.`;
+  $("publishBtn").disabled=!nApproved;
+}
+
+// ---------------- review: include list + one global approval --------------
+function includeCount(){
+  return trackedObjs().filter(o=>includeSet.has(o.object_id)).length;
+}
+function renderIncludeList(){
+  const objs=trackedObjs();
+  // default: every successfully tracked object is included
+  for(const o of objs)if(!includeSet.has("~seen~"+o.object_id)){
+    includeSet.add("~seen~"+o.object_id);includeSet.add(o.object_id);}
+  $("includeList").innerHTML=objs.map(o=>`
+    <label class="chk" style="display:flex;gap:8px;align-items:center;margin:3px 0">
+      <input type="checkbox" data-inc="${o.object_id}" ${includeSet.has(o.object_id)?"checked":""}>
+      <span class="chip" style="background:${o.color};width:12px;height:12px;border-radius:3px;display:inline-block"></span>
+      <b>${esc(o.name)}</b><span class="meta">${o.object_id} · ${o.track.rows} frames tracked${o.track.recovered?" (recovered)":""}</span>
+    </label>`).join("")||"<div class='meta'>no tracked objects yet</div>";
+  $("includeList").querySelectorAll("[data-inc]").forEach(cb=>{
+    cb.onchange=()=>{cb.checked?includeSet.add(cb.dataset.inc):includeSet.delete(cb.dataset.inc);
+      const oid=cb.dataset.inc;
+      cb.checked?hiddenObjects.delete(oid):hiddenObjects.add(oid);
+      repaintCommitted();renderStep();updateApproveNote();};
+  });
+  updateApproveNote();renderStep();
+}
+function updateApproveNote(){
+  const drafts=OBJS.filter(o=>!["tracked","accepted","rejected","excluded"].includes(o.status));
+  const nInc=includeCount(),nEx=trackedObjs().length-nInc;
+  let note=`${nInc} included`+(nEx?`, ${nEx} excluded`:"");
+  if(drafts.length)note+=` · ${drafts.length} unfinished selection${drafts.length>1?"s":""} will be set aside`;
+  $("approveNote").textContent=note;
+  $("approveBtn").disabled=!nInc;
+}
+$("approveBtn").onclick=async()=>{
+  if($("approveBtn").disabled)return;
+  $("approveBtn").disabled=true;
+  banner($("reviewBanner"),"","");
+  const hdr={method:"POST",headers:{"Content-Type":"application/json"}};
+  try{
+    for(const o of trackedObjs()){
+      const status=includeSet.has(o.object_id)?"accepted":"excluded";
+      if(o.status!==status)
+        replaceObj(await jfetch(`/api/objects/${o.object_id}/status`,{...hdr,
+          body:JSON.stringify({dir:R.dir,status})}));
+    }
+    // unfinished selections are set aside so export can proceed cleanly
+    for(const o of OBJS.filter(x=>["draft","mask_accepted"].includes(x.status)))
+      replaceObj(await jfetch(`/api/objects/${o.object_id}/status`,{...hdr,
+        body:JSON.stringify({dir:R.dir,status:"excluded"})}).catch(()=>o));
+    reviewConfirmedThisSession=true;
+    const n=approvedObjs().length;
+    banner($("reviewBanner"),"ok",`${n} object${n>1?"s":""} approved. Export is ready.`);
+    renderObjects();renderStep();
+    $("publishCard").scrollIntoView({behavior:"smooth"});
+  }catch(e){banner($("reviewBanner"),"err",e.message);}
+  $("approveBtn").disabled=false;
+};
+
+// shared job poller: one failed /api/jobs fetch stops the loop and reports
+// instead of leaving the UI stuck forever
+function pollJobLoop(jobId,ms,onTick,onSettle,onError){
+  const t=setInterval(async()=>{
+    let d;
+    try{d=await jfetch("/api/jobs/"+jobId);}
+    catch(e){clearInterval(t);onError(e);return;}
+    onTick(d);
+    if(d.state==="running")return;
+    clearInterval(t);onSettle(d);
+  },ms);
+  return t;
+}
+
+function showNativePanel(dir,n){
+  $("loadMeta").textContent="";
+  const p=$("nativePanel");
+  p.classList.remove("hidden");
+  const defOut=dir.replace(/\/$/,"")+"_prepared";
+  p.innerHTML=`<div class="banner warn">Native NEON recording — canonical preparation required before tracking.\n${esc(n.explanation)}</div>
+    <div class="ins-grid" style="margin:8px 0">
+      <span class="k">recording id</span><span class="v">${esc(n.recording_id||"?")}</span>
+      <span class="k">wearer</span><span class="v">${esc(n.wearer_name||"—")}</span>
+      <span class="k">duration</span><span class="v">${n.duration?(n.duration/1e9).toFixed(3)+" s":"?"}</span>
+      <span class="k">gaze offset (provenance)</span><span class="v">${esc(JSON.stringify(n.gaze_offset))} — already applied in the 200 Hz gaze stream</span>
+      <span class="k">native streams</span><span class="v">${n.streams.map(esc).join(", ")}</span>
+    </div>
+    <div class="row">
+      <input type="text" id="prepOut" value="${esc(defOut)}" spellcheck="false">
+      <button class="primary" id="prepBtn">Prepare recording</button>
+    </div>
+    <div class="prog hidden" id="prepProg"><div id="prepProgBar"></div></div>
+    <div class="meta" id="prepPhase"></div>
+    <div id="prepBanner"></div>`;
+  $("prepBtn").onclick=async()=>{
+    banner($("prepBanner"),"","");
+    $("prepBtn").disabled=true;
+    let jr;
+    try{jr=await jfetch("/api/prepare",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({dir,out_dir:$("prepOut").value.trim()})});}
+    catch(e){banner($("prepBanner"),"err","Preparation refused: "+e.message);$("prepBtn").disabled=false;return;}
+    $("prepProg").classList.remove("hidden");
+    pollJobLoop(jr.job_id,600,d=>{
+      $("prepProgBar").style.width=(100*d.progress)+"%";
+      $("prepPhase").textContent=d.state==="running"?d.phase:"";
+    },d=>{
+      $("prepBtn").disabled=false;
+      if(d.state==="done"){
+        const out=d.result.output_directory;
+        banner($("prepBanner"),"ok","✓ prepared → "+out+"\nRecommended: trim before tracking (neon_trim on port 8001). Or track the full recording now.");
+        $("prepBanner").innerHTML+=`<div class="row" style="margin-top:8px">
+          <button id="prepTrim">Trim before tracking (recommended)</button>
+          <button class="primary" id="prepTrack">Track full recording</button></div>`;
+        $("prepTrack").onclick=()=>{$("nativePanel").classList.add("hidden");loadRec(out);};
+        $("prepTrim").onclick=()=>{alert("Open the neon_trim GUI (http://127.0.0.1:8001), trim "+out+", then choose the trimmed artifact here.");};
+      }else{
+        banner($("prepBanner"),"err","Preparation "+d.state+": "+(d.error||""));
+      }
+    },e=>{
+      $("prepBtn").disabled=false;
+      banner($("prepBanner"),"err","lost contact with the server: "+e.message);
+    });
+  };
+}
+
+// ---------------- video transport (presentation-truth model) ---------------
+// The visible state commits ONLY through FrameSync:
+//  paused  -> exact still image from /api/frame + masks, one atomic commit
+//  playing -> requestVideoFrameCallback presented-frame metadata (mediaTime)
+// video.currentTime / timeupdate / timers NEVER drive masks or the readout.
+function resizeCanvases(){
+  const w=vid.videoWidth,h=vid.videoHeight;
+  for(const c of [$("stillCanvas"),$("overlayCanvas"),$("pointsCanvas")]){c.width=w;c.height=h;}
+}
+window.addEventListener("resize",()=>{});
+
+function initFrameSync(){
+  FS = new FrameSync({
+    ptsTable: pts,
+    fetchImage: async (n, gen) => {
+      const img = new Image();
+      img.src = `/api/frame?dir=${encodeURIComponent(R.dir)}&frame_index=${n}&v=${videoToken}`;
+      await img.decode();               // resolved = pixels are ready
+      return img;
+    },
+    fetchMasks: async (n, gen) => {
+      if (!OBJS.some(o => o.track)) return [];
+      if (!maskCache.has(n)) {
+        const start = Math.max(0, n - 5), end = Math.min(N - 1, n + 30);
+        const d = await jfetch(`/api/review/masks?dir=${encodeURIComponent(R.dir)}&start=${start}&end=${end}`);
+        for (let i = start; i <= end; i++)
+          if (!maskCache.has(i)) maskCache.set(i, d.frames[i] || []);
+      }
+      return maskCache.get(n) || [];
+    },
+    onSeeking: (n, gen) => {
+      // masks vanish immediately: never frame-N masks over an unproven image
+      clearCanvas($("overlayCanvas")); clearCanvas($("pointsCanvas"));
+      $("seekIndicator").textContent = `loading frame ${n}…`;
+      $("seekIndicator").classList.remove("hidden");
+      updateFrameStateBar();
+      updateAnnotationGate();
+    },
+    onCommit: ({frame, image, masks}) => {
+      const sc = $("stillCanvas");
+      sc.getContext("2d").drawImage(image, 0, 0, sc.width, sc.height);
+      sc.classList.add("exact");        // exact frame becomes the background
+      paintFrameMasks(frame, masks);
+      drawPoints();
+      $("seekIndicator").classList.add("hidden");
+      updateReadout(); updateFrameStateBar(); updateAnnotationGate();
+      // keep the <video> element near the frame for seamless play-resume;
+      // purely cosmetic — never used as presentation truth
+      if (Math.abs(vid.currentTime - seekTime(frame)) > 0.05)
+        vid.currentTime = seekTime(frame);
+    },
+    onPlaybackFrame: ({frame, masks}) => {
+      paintFrameMasks(frame, masks || []);
+      updateReadout(); updateFrameStateBar();
+      prefetchMasks(frame);
+    },
+    onError: (err) => {
+      $("seekIndicator").textContent = "frame load failed — retrying may help";
+      const where = trackedObjs().length ? "objBanner" : "objBanner";
+      banner($(where), "err", (String(err).includes("masks")
+        ? "mask retrieval failed — tracked masks cannot be shown: "
+        : "exact-frame load failed: ") + err);
+      updateFrameStateBar();
+    },
+  });
+}
+
+function clearCanvas(c){c.getContext("2d").clearRect(0,0,c.width,c.height);}
+
+function paintFrameMasks(frame, entries){
+  const oc = $("overlayCanvas");
+  clearCanvas(oc);
+  const ctx = oc.getContext("2d");
+  const alpha = parseInt($("opacity").value) / 100;
+  if (!$("showMasksChk").checked) entries = [];
+  for (const en of (entries || [])) {
+    if (hiddenObjects.has(en.object_id)) continue;
+    paintMask(ctx, en.mask_rle, en.color, oc.width, oc.height, alpha);
+  }
+  const o = selObj();
+  if (previewMask && o && previewMask.object_id === o.object_id
+      && frame === o.reference_frame)
+    paintMask(ctx, previewMask.mask_rle, previewMask.color,
+              oc.width, oc.height, alpha);
+}
+
+function updateReadout(){
+  if (!FS) return;
+  const f = FS.displayedFrame;
+  const ts = (f !== null && worldT0 !== null && worldRel)
+    ? " · ts " + (worldT0 + BigInt(worldRel[f])).toString() + " ns" : "";
+  $("readout").innerHTML = f === null
+    ? "no frame committed yet"
+    : `displayed frame <b>${f}</b> / ${N - 1} · t=${(FS.displayedMediaTime ?? 0).toFixed(3)}s${ts}`;
+  if ($("frameInput") !== document.activeElement && f !== null)
+    $("frameInput").value = f;
+  if (f !== null)
+    $("tlPlay").style.left = (100 * Math.min(pts[f], DUR) / DUR) + "%";
+}
+
+function updateFrameStateBar(){
+  if (!FS) return;
+  const s = FS.debugState();
+  let html;
+  if (s.mode === "playing") {
+    html = HAS_RVFC
+      ? `<span class="ok">playback (presented-frame callbacks)</span> · displayed frame ${s.displayedFrame ?? "–"}`
+      : `<span class="bad">⚠ playback masks approximate — this browser lacks requestVideoFrameCallback; pause for exact frames</span>`;
+  } else if (!s.framePresentationReady) {
+    html = `<span class="bad">seeking to frame ${s.requestedFrame}… (annotation disabled)</span>`;
+  } else if (s.requestedFrame !== s.displayedFrame) {
+    html = `<span class="bad">⚠ requested frame ${s.requestedFrame} ≠ displayed frame ${s.displayedFrame} — annotation disabled</span>`;
+  } else {
+    html = `<span class="ok">✓ frame ${s.displayedFrame} committed (image + masks + readout in sync — screenshot-safe)</span>`;
+  }
+  $("frameStateBar").innerHTML = html;
+  if ($("debugChk").checked) {
+    $("debugPanel").classList.remove("hidden");
+    $("debugPanel").textContent = JSON.stringify({
+      ...s, videoCurrentTime: +vid.currentTime.toFixed(4),
+      decodedPTS: s.displayedFrame !== null ? pts[s.displayedFrame] : null,
+      worldTs: (s.displayedFrame !== null && worldT0 !== null && worldRel)
+        ? (worldT0 + BigInt(worldRel[s.displayedFrame])).toString() : null,
+      hasRVFC: HAS_RVFC,
+    }, null, 1);
+  } else $("debugPanel").classList.add("hidden");
+}
+$("debugChk").onchange = updateFrameStateBar;
+$("showMasksChk").onchange=()=>repaintCommitted();
+$("showPointsChk").onchange=()=>repaintCommitted();
+
+function updateAnnotationGate(){
+  const allowed = FS && FS.annotationAllowed() && annotatable(selObj());
+  $("pointsCanvas").classList.toggle("annotating", !!allowed);
+  $("newObjBtn").disabled = !(FS && FS.annotationAllowed());
+}
+
+// ---- transport controls: everything routes through FS.requestFrame -------
+$("playBtn").onclick = () => { vid.paused ? startPlayback() : vid.pause(); };
+function startPlayback(){
+  if (!FS) return;
+  const from = FS.displayedFrame ?? 0;
+  $("stillCanvas").classList.remove("exact");
+  FS.enterPlayback();
+  if (Math.abs(vid.currentTime - seekTime(from)) > 0.05)
+    vid.currentTime = seekTime(from);
+  vid.play();
+  updateFrameStateBar();
+}
+vid.addEventListener("play", () => {
+  $("playBtn").textContent = "⏸ pause";
+  if (FS && FS.mode !== "playing") {   // play from any path (media keys etc.)
+    $("stillCanvas").classList.remove("exact");
+    FS.enterPlayback(); updateFrameStateBar();
+  }
+  if (HAS_RVFC) vid.requestVideoFrameCallback(rvfcLoop);
+});
+vid.addEventListener("pause", () => {
+  $("playBtn").textContent = "▶ play";
+  if (FS && FS.mode === "playing") FS.exitPlayback();  // -> exact still path
+});
+function rvfcLoop(now, meta){
+  if (!FS || FS.mode !== "playing") return;
+  // meta.mediaTime = the PRESENTED frame's timestamp: the only playback truth
+  FS.presentedFrame(meta.mediaTime, f => maskCache.get(f));
+  vid.requestVideoFrameCallback(rvfcLoop);
+}
+if (!HAS_RVFC) {
+  // clearly-identified fallback: approximate only, never claimed exact
+  vid.addEventListener("timeupdate", () => {
+    if (!FS || FS.mode !== "playing") return;
+    const f = FS.floorFrameForTime(vid.currentTime);
+    paintFrameMasks(f, maskCache.get(f) || []);
+  });
+}
+
+$("prevF").onclick = () => stepFrame(-1);
+$("nextF").onclick = () => stepFrame(1);
+function stepFrame(d){
+  if (!FS) return;
+  vid.pause();
+  FS.requestFrame((FS.displayedFrame ?? 0) + d);
+}
+$("speedSel").onchange = () => { vid.playbackRate = parseFloat($("speedSel").value); };
+$("frameInput").addEventListener("change", () => {
+  if (!FS) return;
+  vid.pause();
+  FS.requestFrame(parseInt($("frameInput").value) || 0);
+});
+document.addEventListener("keydown", e => {
+  if(!N||modal.mode||e.ctrlKey||e.metaKey||e.altKey||["INPUT","SELECT","TEXTAREA"].includes(e.target.tagName))return;
+  if(e.code==="Space"){e.preventDefault();$("playBtn").click();}
+  else if(e.key==="ArrowLeft"){e.preventDefault();stepFrame(-1);}
+  else if(e.key==="ArrowRight"){e.preventDefault();stepFrame(1);}
+});
+$("tl").addEventListener("pointerdown", e => {
+  if (!FS) return;
+  const r = $("tl").getBoundingClientRect();
+  const t = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * DUR;
+  vid.pause();
+  FS.requestFrame(FS.floorFrameForTime(Math.min(t, DUR - 1e-6)));
+});
+$("opacity").oninput = () => {
+  if (FS && FS.displayedFrame !== null && FS.mode === "paused")
+    paintFrameMasks(FS.displayedFrame, maskCache.get(FS.displayedFrame) || []);
+};
+
+// ---------------- annotation interactions ---------------------------------
+function selObj(){return OBJS.find(o=>o.object_id===selId)||null;}
+// only PRE-track states are click-annotatable: editing a tracked/accepted
+// object requires the explicit "rerun object" button (prevents a stray click
+// during review from silently demoting an accepted track)
+function annotatable(o){return o&&["draft","mask_accepted"].includes(o.status);}
+const pc=$("pointsCanvas");
+function canvasCoords(e){
+  const r=pc.getBoundingClientRect();
+  const x=(e.clientX-r.left)*pc.width/r.width;
+  const y=(e.clientY-r.top)*pc.height/r.height;
+  // clamp: edge clicks/drags must stay inside the valid pixel range
+  return [Math.min(Math.max(x,0),pc.width-1),
+          Math.min(Math.max(y,0),pc.height-1)];
+}
+pc.addEventListener("contextmenu",e=>e.preventDefault());
+pc.addEventListener("pointerdown",e=>{
+  const o=selObj();if(!o||!annotatable(o))return;
+  // an unresolved seek still blocks annotation (FrameSync stays the single
+  // presentation truth — never video.currentTime)
+  if(!FS || !FS.annotationAllowed()) return;
+  if(FS.displayedFrame!==o.reference_frame){
+    // NEVER silently seek away: the click was meant for THIS frame. Offer
+    // explicit choices instead and record nothing.
+    showRefMismatch(o, FS.displayedFrame);
+    return;
+  }
+  hideRefMismatch();
+  const [x,y]=canvasCoords(e);
+  // grab an existing point?
+  const pts0=o.points||[];
+  for(let i=0;i<pts0.length;i++){
+    const dx=pts0[i][0]-x,dy=pts0[i][1]-y;
+    if(Math.hypot(dx,dy)<12){dragPoint={idx:i};pc.setPointerCapture(e.pointerId);return;}
+  }
+  if(e.button===2||e.shiftKey){addPoint(x,y,0);return;}
+  draftRect={x0:x,y0:y,x1:x,y1:y,moved:false};
+  pc.setPointerCapture(e.pointerId);
+});
+pc.addEventListener("pointermove",e=>{
+  const o=selObj();if(!o)return;
+  const [x,y]=canvasCoords(e);
+  if(dragPoint){o.points[dragPoint.idx]=[x,y];drawPoints();return;}
+  if(draftRect){draftRect.x1=x;draftRect.y1=y;
+    if(Math.hypot(x-draftRect.x0,y-draftRect.y0)>6)draftRect.moved=true;
+    drawPoints();}
+});
+pc.addEventListener("pointerup",async e=>{
+  const o=selObj();if(!o)return;
+  if(dragPoint){const dp=dragPoint;dragPoint=null;await pushPoints(o);return;}
+  if(!draftRect)return;
+  const rct=draftRect;draftRect=null;
+  if(rct.moved){
+    // rectangle convenience: its CENTER becomes a positive point (the point,
+    // not the box, is the actual SAM3 instance prompt); it stays movable
+    addPoint((rct.x0+rct.x1)/2,(rct.y0+rct.y1)/2,1);
+  }else{
+    addPoint(rct.x0,rct.y0,1);
+  }
+});
+async function addPoint(x,y,label){
+  const o=selObj();if(!o)return;
+  o.points=(o.points||[]).concat([[x,y]]);
+  o.point_labels=(o.point_labels||[]).concat([label]);
+  await pushPoints(o);
+}
+// point writes are serialized per object (promise chain) with the payload
+// snapshotted at enqueue time, so rapid clicks can neither reorder nor lose
+// the newest point; any prompt change also voids the on-screen preview mask
+const pushChains=new Map();
+async function pushPoints(o){
+  previewMask=null;
+  const oid=o.object_id;
+  const snap={dir:R.dir,points:o.points.map(p=>[p[0],p[1]]),
+              labels:o.point_labels.slice(),ref_frame:o.reference_frame};
+  const prev=pushChains.get(oid)||Promise.resolve();
+  const next=prev.catch(()=>{}).then(async()=>{
+    try{
+      const upd=await jfetch(`/api/objects/${oid}/points`,{method:"POST",
+        headers:{"Content-Type":"application/json"},body:JSON.stringify(snap)});
+      if(pushChains.get(oid)===next)replaceObj(upd);
+    }catch(e){banner($("objBanner"),"err",e.message);await refreshObjects();}
+  });
+  pushChains.set(oid,next);
+  await next;
+  repaintCommitted();renderObjects();
+}
+function repaintCommitted(){
+  if(FS && FS.mode==="paused" && FS.displayedFrame!==null){
+    paintFrameMasks(FS.displayedFrame, maskCache.get(FS.displayedFrame)||[]);
+    drawPoints();
+  }
+  updateAnnotationGate();
+  // the creation control and the anchor indicator always describe the
+  // frame FrameSync has actually committed
+  if(typeof updateNewObjLabel==="function"){updateNewObjLabel();
+    renderRefIndicator();
+    const o=selObj();
+    if(o&&FS&&FS.displayedFrame===o.reference_frame)hideRefMismatch();}
+}
+function replaceObj(o){const i=OBJS.findIndex(x=>x.object_id===o.object_id);
+  if(i>=0)OBJS[i]=o;else OBJS.push(o);}
+async function refreshObjects(){const d=await jfetch("/api/objects?dir="+encodeURIComponent(R.dir));OBJS=d.objects;renderObjects();repaintCommitted();}
+
+// ---------------- drawing --------------------------------------------------
+let previewMask=null;   // {object_id, mask_rle, color}
+function drawPoints(){
+  const ctx=pc.getContext("2d");
+  ctx.clearRect(0,0,pc.width,pc.height);
+  const o=selObj();
+  if(o&&FS&&FS.mode==="paused"&&FS.displayedFrame===o.reference_frame&&($("showPointsChk").checked||currentStep()<3)){
+    (o.points||[]).forEach((p,i)=>{
+      const pos=o.point_labels[i]===1;
+      ctx.beginPath();ctx.arc(p[0],p[1],9,0,7);
+      ctx.fillStyle=pos?"rgba(63,191,111,.9)":"rgba(224,92,92,.9)";
+      ctx.fill();ctx.lineWidth=3;ctx.strokeStyle="#08121f";ctx.stroke();
+      ctx.fillStyle="#fff";ctx.font="bold 12px sans-serif";ctx.textAlign="center";
+      ctx.fillText(pos?"+":"−",p[0],p[1]+4);
+    });
+  }
+  if(draftRect){
+    ctx.setLineDash([6,4]);ctx.strokeStyle="rgba(77,163,255,.9)";ctx.lineWidth=2;
+    ctx.strokeRect(Math.min(draftRect.x0,draftRect.x1),Math.min(draftRect.y0,draftRect.y1),
+      Math.abs(draftRect.x1-draftRect.x0),Math.abs(draftRect.y1-draftRect.y0));
+    ctx.setLineDash([]);
+  }
+}
+// (drawMasks/redrawAll retired: paintFrameMasks commits per FrameSync frame)
+
+let maskGen=0;
+function invalidateMasks(){maskGen++;maskCache.clear();}
+async function prefetchMasks(f){
+  if(!OBJS.some(o=>o.track))return;
+  const start=Math.max(0,f-10),end=Math.min(N-1,f+60);
+  let need=false;
+  for(let i=start;i<=end;i++)if(!maskCache.has(i)){need=true;break;}
+  const key=start+"-"+end;
+  if(!need||maskFetchInFlight.has(key))return;
+  maskFetchInFlight.add(key);
+  const gen=maskGen;
+  try{
+    const d=await jfetch(`/api/review/masks?dir=${encodeURIComponent(R.dir)}&start=${start}&end=${end}`);
+    if(gen!==maskGen)return;   // cache was invalidated while in flight
+    for(let i=start;i<=end;i++)maskCache.set(i,d.frames[i]||[]);
+    if(maskCache.size>800){ // bound memory
+      const keep=new Set();for(let i=Math.max(0,f-100);i<=Math.min(N-1,f+150);i++)keep.add(i);
+      for(const k of maskCache.keys())if(!keep.has(k))maskCache.delete(k);
+    }
+  }catch{}finally{maskFetchInFlight.delete(key);}
+}
+
+// ---------------- object list ----------------------------------------------
+/* ---------------- middle-frame object prompting ----------------
+   Objects may be anchored at ANY exactly-presented frame. The reference
+   frame always comes from FrameSync's committed displayedFrame — never
+   from video.currentTime — and creating an object keeps the image on that
+   frame, selects it and enters anchor placement immediately. */
+function refFrameForNewObject(){
+  // only a committed, screenshot-safe frame may anchor a new object; a
+  // rapid seek that has not resolved must never bind a stale frame
+  return (FS && FS.annotationAllowed()) ? FS.displayedFrame : null;
+}
+function updateNewObjLabel(){
+  const f=refFrameForNewObject();
+  const b=$("newObjBtn");
+  b.textContent = f===null ? "+ Add new object (waiting for exact frame…)"
+                           : `+ Add new object at frame ${f}`;
+  b.disabled = f===null;
+}
+function renderRefIndicator(){
+  const el=$("refIndicator"), o=selObj();
+  if(!o){el.classList.add("hidden");return;}
+  const cur=FS?FS.displayedFrame:null;
+  const same=cur===o.reference_frame;
+  el.classList.remove("hidden");
+  el.innerHTML=`<b>Reference frame: ${o.reference_frame}</b> · ${esc(o.name)}
+    <span class="meta">${esc(o.object_id)}</span>` +
+    (same?` <span style="color:#5ad17a">— placing anchors on this frame</span>`
+         :` <span style="color:#e5c15e">— you are viewing frame ${cur}</span>`);
+}
+function hideRefMismatch(){$("refMismatch").classList.add("hidden");}
+function showRefMismatch(o,n){
+  const el=$("refMismatch");
+  el.classList.remove("hidden");
+  el.innerHTML=`Selected object <b>${esc(o.name)}</b> is anchored at frame
+    <b>${o.reference_frame}</b>. You are viewing frame <b>${n}</b>.
+    <div class="meta" style="margin:4px 0 8px">Nothing was recorded — anchor
+      coordinates only mean something on the image they were placed on.</div>
+    <div class="row">
+      <button class="small primary" id="rmNew">Create a new object at frame ${n}</button>
+      <button class="small" id="rmMove">Move ${esc(o.name)} reference to frame ${n} and clear its anchors</button>
+      <button class="small" id="rmGo">Go to frame ${o.reference_frame}</button>
+      <button class="small" id="rmCancel">Cancel</button>
+    </div>`;
+  $("rmNew").onclick=()=>{hideRefMismatch();createObjectHere();};
+  $("rmMove").onclick=()=>{hideRefMismatch();moveReference(o,n);};
+  $("rmGo").onclick=()=>{hideRefMismatch();if(FS)FS.requestFrame(o.reference_frame);};
+  $("rmCancel").onclick=hideRefMismatch;
+}
+async function createObjectHere(){
+  banner($("objBanner"),"","");
+  const ref=refFrameForNewObject();
+  if(ref===null){banner($("objBanner"),"err",
+    "the displayed frame is not resolved yet — wait for the exact frame");return;}
+  const name=$("newName").value.trim();
+  try{
+    const o=await jfetch("/api/objects",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({dir:R.dir,name,ref_frame:ref})});
+    OBJS.push(o);selId=o.object_id;previewMask=null;   // auto-select
+    $("newName").value="";
+    renderObjects();repaintCommitted();renderRefIndicator();
+    banner($("objBanner"),"ok",
+      `“${o.name}” (${o.object_id}) anchored at frame ${o.reference_frame}. `+
+      `Click the image to place positive anchors; shift-click or right-click `+
+      `for negative ones, then preview the mask.`);
+  }catch(e){banner($("objBanner"),"err",e.message);}
+}
+async function moveReference(o,n){
+  if(!confirm(`Move “${o.name}” (${o.object_id}) from frame `+
+              `${o.reference_frame} to frame ${n}?\n\n`+
+              `Its anchors, preview mask, track and review decision are `+
+              `cleared — anchor coordinates belong to the old image. The `+
+              `object id, name and color are kept; you must re-prompt, `+
+              `preview, use the selection and track again.`)) return;
+  try{
+    const upd=await jfetch(`/api/objects/${o.object_id}/move_reference`,
+      {method:"POST",headers:{"Content-Type":"application/json"},
+       body:JSON.stringify({dir:R.dir,frame:n})});
+    const i=OBJS.findIndex(x=>x.object_id===o.object_id);
+    if(i>=0)OBJS[i]=upd;
+    selId=upd.object_id;previewMask=null;
+    invalidateMasks();renderObjects();repaintCommitted();renderRefIndicator();
+    banner($("objBanner"),"warn",
+      `“${upd.name}” re-anchored to frame ${n}. Anchors, preview and track `+
+      `were cleared — place anchors again on this frame.`);
+  }catch(e){banner($("objBanner"),"err",e.message);}
+}
+$("newObjBtn").onclick=createObjectHere;
+// user-facing language — researchers never see the internal state names
+const USER_STATE={draft:["selecting…",""],
+  mask_accepted:["Ready to track","ready"],
+  tracked:["Needs review","tracked"],
+  accepted:["Approved ✓","ready"],
+  rejected:["Excluded",""],excluded:["Excluded",""]};
+function statusBadge(o){
+  const [txt,cls]=USER_STATE[o.status]||[o.status,""];
+  return `<span class="badge ${cls}">${txt}</span>`;
+}
+function renderObjects(){
+  $("objCount").textContent=OBJS.length?`(${OBJS.length})`:"";
+  const el=$("objlist");
+  el.innerHTML=OBJS.map(o=>{
+    const sel=o.object_id===selId;
+    const t=o.track;
+    let info=`ref frame ${o.reference_frame} · ${(o.points||[]).length} point(s)`;
+    if(o.preview&&o.preview.found)info+=` · mask ${o.preview.mask_area}px² score ${(o.preview.score??0).toFixed(2)}`;
+    if(t)info+=`\nfwd ${t.forward_ok?"✓":"✗"} bwd ${t.backward_ok?"✓":"✗"} · ${t.rows} rows · frames ${t.first_frame}–${t.last_frame}`;
+    if(t&&t.validation_problems&&t.validation_problems.length)info+=`\n⚠ ${t.validation_problems.join("; ")}`;
+    return `<div class="obj ${sel?"sel":""}" data-oid="${o.object_id}">
+      <div class="head">
+        <span class="chip" style="background:${o.color}"></span>
+        <span class="nm" title="rename" data-act="rename">${esc(o.name)}</span>
+        <span class="id">${o.object_id}</span>
+        ${statusBadge(o)}
+      </div>
+      <div class="info">${esc(info)}</div>
+      <div class="acts">
+        <button class="small" data-act="goto">go to ref</button>
+        <button class="small" data-act="setref">ref = current frame</button>
+        ${o.status==="draft"||o.status==="mask_accepted"?`
+          <button class="small" data-act="undo">undo pt</button>
+          <button class="small" data-act="clear">clear pts</button>
+          <button class="small primary" data-act="preview">preview mask</button>`:""}
+        ${o.preview&&o.preview.found&&o.status==="draft"?`
+          <button class="small good" data-act="acceptmask">Use this selection</button>`:""}
+        ${o.status==="tracked"?`
+          <button class="small good" data-act="acc">approve</button>
+          <button class="small danger" data-act="rej">exclude (bad track)</button>
+          <button class="small" data-act="exc">exclude</button>`:""}
+        ${["tracked","accepted","rejected"].includes(o.status)?`
+          <button class="small" data-act="rerun">rerun object</button>
+          <button class="small" data-act="togglevis">${hiddenObjects.has(o.object_id)?"show":"hide"}</button>`:""}
+        <button class="small danger" data-act="del">delete</button>
+      </div>
+    </div>`;}).join("")||"<div class='meta'>no objects yet — seek to a good reference frame and create one</div>";
+  el.querySelectorAll(".obj").forEach(div=>{
+    const oid=div.dataset.oid;
+    div.onclick=e=>{
+      const act=e.target.dataset&&e.target.dataset.act;
+      if(!act){selId=oid;previewMask=null;renderObjects();repaintCommitted();
+        $("pointsCanvas").classList.toggle("annotating",annotatable(selObj()));return;}
+      handleAct(oid,act,e);
+    };
+  });
+  $("pointsCanvas").classList.toggle("annotating",annotatable(selObj()));
+  updateTrackButton();
+  if(typeof renderIncludeList==="function"&&!$("reviewCard").classList.contains("hidden"))updateApproveNote();
+}
+async function handleAct(oid,act,e){
+  e.stopPropagation();
+  selId=oid;const o=OBJS.find(x=>x.object_id===oid);
+  banner($("objBanner"),"","");
+  try{
+    if(act==="goto"){vid.pause();FS.requestFrame(o.reference_frame);}
+    else if(act==="setref"){
+      previewMask=null;
+      replaceObj(await jfetch(`/api/objects/${oid}/points`,{method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({dir:R.dir,points:o.points||[],labels:o.point_labels||[],ref_frame:displayedFrame()})}));}
+    else if(act==="undo"){
+      o.points.pop();o.point_labels.pop();await pushPoints(o);previewMask=null;}
+    else if(act==="clear"){
+      o.points=[];o.point_labels=[];await pushPoints(o);previewMask=null;}
+    else if(act==="preview"){
+      if(!workerReady){
+        banner($("objBanner"),"warn","preparing the SAM3 model (first time takes ~1 min)…");
+        const ok=await ensureWorker(p=>banner($("objBanner"),"warn",p+"…"));
+        if(!ok){banner($("objBanner"),"err","the tracker could not start — see the message in the Track panel");return;}
+      }
+      banner($("objBanner"),"","");
+      $("objBanner").innerHTML="<div class='banner warn'>running single-frame preview…</div>";
+      const d=await jfetch(`/api/objects/${oid}/preview`,{method:"POST",
+        headers:{"Content-Type":"application/json"},body:JSON.stringify({dir:R.dir})});
+      replaceObj(d.object);
+      if(d.found){previewMask={object_id:oid,mask_rle:d.mask_rle,color:o.color};
+        banner($("objBanner"),"ok",`mask found (area ${d.mask_area}px², score ${(d.score??0).toFixed(3)}). Click “Use this selection” if it covers the right object — this confirms the starting mask on one frame; full-video tracking has not run yet.`);}
+      else{previewMask=null;banner($("objBanner"),"warn","no mask found at these points — adjust the prompt");}
+      FS.requestFrame(o.reference_frame);}
+    else if(act==="acceptmask"){
+      replaceObj(await jfetch(`/api/objects/${oid}/accept_mask`,{method:"POST",
+        headers:{"Content-Type":"application/json"},body:JSON.stringify({dir:R.dir})}));
+      banner($("objBanner"),"ok",`${o.name} is ready to track.`);
+      previewMask=null;
+      setTimeout(()=>$("guidanceCard").scrollIntoView({behavior:"smooth",block:"nearest"}),150);}
+    else if(act==="acc"||act==="rej"||act==="exc"){
+      const status={acc:"accepted",rej:"rejected",exc:"excluded"}[act];
+      replaceObj(await jfetch(`/api/objects/${oid}/status`,{method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({dir:R.dir,status})}));
+      invalidateMasks();}
+    else if(act==="rerun"){
+      // revise-and-rerun: back to draft flow, keep points for editing
+      banner($("objBanner"),"warn",`${oid}: adjust points/reference frame if needed, preview, click "Use this selection", then "Track 1 ready object" — only this object will be recomputed; other tracks are kept`);
+      replaceObj(await jfetch(`/api/objects/${oid}/points`,{method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({dir:R.dir,points:o.points,labels:o.point_labels,ref_frame:o.reference_frame})}));
+      invalidateMasks();}
+    else if(act==="togglevis"){
+      hiddenObjects.has(oid)?hiddenObjects.delete(oid):hiddenObjects.add(oid);}
+    else if(act==="del"){
+      if(!confirm(`delete ${o.name} (${oid})? its ID will not be reused`))return;
+      await jfetch(`/api/objects/${oid}/delete`,{method:"POST",
+        headers:{"Content-Type":"application/json"},body:JSON.stringify({dir:R.dir})});
+      OBJS=OBJS.filter(x=>x.object_id!==oid);
+      if(selId===oid){selId=null;previewMask=null;}
+      invalidateMasks();}
+    else if(act==="rename"){
+      const nn=prompt("new name (ID and color stay unchanged):",o.name);
+      if(nn&&nn!==o.name)
+        replaceObj(await jfetch(`/api/objects/${oid}/rename`,{method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({dir:R.dir,name:nn})}));}
+  }catch(err){banner($("objBanner"),"err",err.message);await refreshObjects();}
+  renderObjects();repaintCommitted();refreshOutDest();
+}
+
+// ---------------- worker + tracking ---------------------------------------
+function updateWorkerUI(ready){
+  workerReady=ready;
+  $("workerBadge").textContent="worker: "+(ready?"ready":"off");
+  $("workerBadge").className="badge "+(ready?"ready":"");
+  $("workerBtn").disabled=ready;
+  updateTrackButton();
+}
+// ensureWorker(): resolves when SAM3 is ready — reuses a live worker, starts
+// one transparently otherwise. Users never manage the worker lifecycle;
+// the manual buttons live under "show advanced controls".
+function ensureWorker(statusCb){
+  if(workerReady)return Promise.resolve(true);
+  return new Promise(async resolve=>{
+    banner($("trackBanner"),"","");
+    let jr;
+    try{jr=await jfetch("/api/worker/start",{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({dir:R.dir})});}
+    catch(e){
+      banner($("trackBanner"),"err","Tracking cannot start: "+e.message+
+        (e.message.includes("GPU")?"":" — check that the GPU machine is available, then try again."));
+      resolve(false);return;
+    }
+    pollJobLoop(jr.job_id,1200,d=>{
+      const ph=d.phase==="loading_model"?"loading the SAM3 model (first time takes ~1 min)":
+               d.phase==="loading_video"?"loading the video onto the GPU":(d.phase||"starting");
+      statusCb&&statusCb(ph);
+      $("workerBadge").textContent="worker: "+(d.phase||"starting");
+    },d=>{
+      if(d.state==="done"){updateWorkerUI(true);resolve(true);}
+      else{updateWorkerUI(false);
+        banner($("trackBanner"),"err","Tracking cannot start — the SAM3 worker failed: "+(d.error||"")+
+          "\nFix the cause (see worker log under advanced) and click Track again.");
+        resolve(false);}
+    },e=>{updateWorkerUI(false);
+      banner($("trackBanner"),"err","lost contact with the server: "+e.message);resolve(false);});
+  });
+}
+$("workerBtn").onclick=()=>ensureWorker(p=>{$("trackPhase").textContent=p;});
+$("workerStopBtn").onclick=async()=>{
+  await jfetch("/api/worker/stop",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({dir:R.dir})}).catch(()=>{});
+  updateWorkerUI(false);
+};
+function trackable(){return OBJS.filter(o=>["mask_accepted"].includes(o.status));}
+function trackedObjs(){return OBJS.filter(o=>o.track&&["tracked","accepted"].includes(o.status));}
+function approvedObjs(){return OBJS.filter(o=>o.status==="accepted");}
+function updateTrackButton(){
+  const t=trackable();
+  $("trackBtn").disabled=!t.length||!!trackJob;   // worker starts automatically
+  $("trackBtn").textContent=t.length?`Track ${t.length} ready object${t.length>1?"s":""}`:"Track ready objects";
+  $("estimate").textContent=t.length?`${t.length} object(s) × ${N} frames = ${t.length} tracking pass(es), forward + backward each`:"";
+  renderStep();
+}
+$("trackBtn").onclick=async()=>{
+  if(trackJob||$("trackBtn").disabled)return;   // re-entrancy guard
+  const ids=trackable().map(o=>o.object_id);
+  if(!ids.length)return;
+  $("trackBtn").disabled=true;                  // BEFORE any await
+  banner($("trackBanner"),"","");
+  $("trackPhase").textContent="preparing the tracker…";
+  const ok=await ensureWorker(p=>{$("trackPhase").textContent=p;});
+  if(!ok){updateTrackButton();return;}
+  let jr;
+  try{jr=await jfetch("/api/track",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({dir:R.dir,object_ids:ids})});}
+  catch(e){banner($("trackBanner"),"err",e.message);updateTrackButton();return;}
+  const jobId=jr.job_id;                        // closure, not the global
+  trackJob=jobId;
+  $("trackCancelBtn").classList.remove("hidden");
+  $("trackProg").classList.remove("hidden");
+  pollJobLoop(jobId,900,d=>{
+    $("trackProgBar").style.width=(100*d.progress)+"%";
+    $("trackPhase").textContent=d.state==="running"?d.phase:"";
+  },async d=>{
+    if(trackJob===jobId)trackJob=null;
+    $("trackCancelBtn").classList.add("hidden");$("trackProg").classList.add("hidden");
+    await refreshObjects();invalidateMasks();previewMask=null;
+    if(d.state==="done"){
+      banner($("trackBanner"),"ok",`Tracking finished in ${d.result.runtime_s}s. Review the colored masks.`);
+      reviewConfirmedThisSession=false;
+      $("showPointsChk").checked=false;      // review defaults: masks on, points off
+      $("showMasksChk").checked=true;
+      await loadReview();renderIncludeList();
+    }else banner($("trackBanner"),d.state==="cancelled"?"warn":"err",
+      "tracking "+d.state+(d.error?": "+d.error:""));
+    updateTrackButton();
+  },e=>{
+    if(trackJob===jobId)trackJob=null;
+    $("trackCancelBtn").classList.add("hidden");
+    banner($("trackBanner"),"err","lost contact with the server: "+e.message);
+    updateTrackButton();
+  });
+};
+$("trackCancelBtn").onclick=()=>{if(trackJob)fetch("/api/jobs/"+trackJob+"/cancel",{method:"POST"});};
+
+// ---------------- review ---------------------------------------------------
+async function loadReview(){
+  try{reviewData=await jfetch("/api/review/summary?dir="+encodeURIComponent(R.dir));}
+  catch{return;}
+  const p=$("presence");
+  p.innerHTML=reviewData.objects.map(o=>{
+    const pr=o.presence;
+    let spans="";
+    if(pr.frames_present){
+      spans+=`<div class="pspan" style="left:${100*pr.first_frame/N}%;width:${100*(pr.last_frame-pr.first_frame+1)/N}%;background:${o.color}"></div>`;
+      for(const g of pr.gaps)
+        spans+=`<div class="pspan" style="left:${100*g[0]/N}%;width:${100*(g[1]-g[0]+1)/N}%;background:#14161a"></div>`;
+    }
+    const warns=areaWarnings(o);
+    return `<div class="prow"><span class="plabel" title="${o.object_id}">${esc(o.name)}${warns?" ⚠":""}</span>
+      <div class="pbar" title="${pr.frames_present} frames present, ${pr.n_gaps} gap(s)${warns?" — "+warns:""}">${spans}</div></div>`;
+  }).join("");
+}
+function areaWarnings(o){
+  const a=o.area_timeline;if(!a||a.length<3)return "";
+  let jumps=0;
+  for(let i=1;i<a.length;i++){
+    const r=a[i][1]/Math.max(a[i-1][1],1);
+    if(r>3||r<1/3)jumps++;
+  }
+  const w=[];
+  if(jumps)w.push(jumps+" abrupt mask-area change(s)");
+  if(o.presence.n_gaps>3)w.push(o.presence.n_gaps+" presence gaps");
+  return w.join("; ");
+}
+
+// ---------------- publish ---------------------------------------------------
+function refreshOutDest(){
+  if(!R)return;
+  if(!outNameDirty)$("outName").value=R.dir.split("/").pop()+"_tracked_objects";
+  const dest=outParent?outParent.replace(/\/$/,"")+"/"+$("outName").value.trim():null;
+  $("outResolved").textContent=dest||"–";
+  if(!dest)return;
+  jfetch(`/api/out_check?dir=${encodeURIComponent(R.dir)}&path=${encodeURIComponent(dest)}`)
+    .then(d=>{
+      if(!d.authorized)banner($("outWarn"),"err","✗ outside configured roots");
+      else if(d.inside_source)banner($("outWarn"),"err","✗ inside the source recording");
+      else if(d.exists)banner($("outWarn"),"warn","⚠ destination exists — publishing will refuse to overwrite");
+      else banner($("outWarn"),"","");
+    }).catch(()=>{});
+}
+$("outName").addEventListener("input",()=>{outNameDirty=true;refreshOutDest();});
+$("publishBtn").onclick=async()=>{
+  if($("publishBtn").disabled)return;           // re-entrancy guard
+  $("publishBtn").disabled=true;                // BEFORE any await
+  banner($("pubBanner"),"","");$("pubResult").innerHTML="";
+  let chk;
+  try{chk=await jfetch("/api/publish/check?dir="+encodeURIComponent(R.dir));}
+  catch(e){banner($("pubBanner"),"err",e.message);$("publishBtn").disabled=false;return;}
+  if(!chk.ready){banner($("pubBanner"),"err","not publishable:\n• "+chk.blockers.join("\n• "));$("publishBtn").disabled=false;return;}
+  const dest=outParent.replace(/\/$/,"")+"/"+$("outName").value.trim();
+  let jr;
+  try{jr=await jfetch("/api/publish",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({dir:R.dir,out_dir:dest,make_overlay:$("overlayChk").checked})});}
+  catch(e){banner($("pubBanner"),"err","refused: "+e.message);$("publishBtn").disabled=false;return;}
+  const jobId=jr.job_id;                        // closure, not the global
+  pubJob=jobId;$("pubProg").classList.remove("hidden");
+  pollJobLoop(jobId,800,d=>{
+    $("pubProgBar").style.width=(100*d.progress)+"%";
+    $("pubPhase").textContent=d.state==="running"?d.phase:"";
+  },async d=>{
+    if(pubJob===jobId)pubJob=null;
+    $("publishBtn").disabled=false;$("pubProg").classList.add("hidden");
+    if(d.state==="done"){
+      $("step4").classList.add("on");
+      const m=d.result;
+      banner($("pubBanner"),"ok",`✓ published → ${m.output_directory}\nartifact ${m.artifact_id.slice(0,12)}… · ${m.counts.objects_accepted} object(s) · ${m.counts.table_rows} rows · overlay: ${m.overlay.present?"yes":"no"} · all validations passed`);
+      // verify reload through the loader + parent resolvability
+      try{
+        const a=await jfetch("/api/artifact?path="+encodeURIComponent(m.output_directory));
+        const res=a.parent_resolvable;
+        $("pubResult").innerHTML="<pre class='result'>"+esc(JSON.stringify({
+          artifact_id:a.artifact_id,parent_paths:a.parent_paths,
+          parent_resolvable:res,objects:m.objects.map(o=>({id:o.object_id,name:o.name,status:o.review_status}))},null,2))+"</pre>";
+        $("gazeFusionBtn").classList.remove("hidden");
+        $("gazeFusionBtn").onclick=()=>wbGoNext(m.output_directory);
+        wbOfferNext(m.output_directory);
+      }catch(e){banner($("pubBanner"),"warn","published but reload check failed: "+e.message);}
+      refreshOutDest();
+    }else banner($("pubBanner"),d.state==="cancelled"?"warn":"err","publish "+d.state+": "+(d.error||""));
+  },e=>{
+    if(pubJob===jobId)pubJob=null;
+    $("publishBtn").disabled=false;$("pubProg").classList.add("hidden");
+    banner($("pubBanner"),"err","lost contact with the server: "+e.message);
+  });
+};
+
+/* ---------------- pipeline workbench integration ----------------
+   Same-tab only. A handoff path is loaded through the ordinary
+   /api/load route, so path authorization and intake classification
+   apply exactly as they do for a manually chosen folder. */
+const WB_Q=new URLSearchParams(location.search);
+const WB_HOME=WB_Q.get("home")||"http://127.0.0.1:8000/";
+$("pipelineHome").href=WB_HOME;
+function wbGoNext(outDir){
+  location.href=WB_HOME.replace(/\/$/,"")+"/go?to=gaze_object_fusion&handoff="
+    +encodeURIComponent(outDir);
+}
+function wbOfferNext(outDir){
+  if(!outDir)return;
+  const a=$("wbNext");
+  a.href=WB_HOME.replace(/\/$/,"")+"/go?to=gaze_object_fusion&handoff="
+    +encodeURIComponent(outDir);
+  a.classList.remove("hidden");
+}
+if(WB_Q.get("handoff"))loadRec(WB_Q.get("handoff"));
+</script>
+</body>
+</html>

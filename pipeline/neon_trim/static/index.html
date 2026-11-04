@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NEON Trim — synchronized trimming</title>
+<style>
+  :root {
+    --bg:#14161a; --card:#1d2026; --edge:#2c3038; --fg:#e8eaed; --dim:#9aa0a8;
+    --acc:#4da3ff; --ok:#3fbf6f; --warn:#e0a63c; --err:#e05c5c; --sel:#2a4a6e;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  .wrap { max-width:1060px; margin:0 auto; padding:18px 20px 60px; }
+  h1 { font-size:19px; margin:4px 0 14px; font-weight:650; }
+  h1 small { color:var(--dim); font-weight:400; font-size:13px; margin-left:10px; }
+  .card { background:var(--card); border:1px solid var(--edge); border-radius:10px;
+          padding:14px 16px; margin-bottom:14px; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  input[type=text] { flex:1; min-width:280px; background:#111318; color:var(--fg);
+          border:1px solid var(--edge); border-radius:6px; padding:8px 10px;
+          font:13px ui-monospace,Menlo,monospace; }
+  input[type=text][readonly] { color:var(--dim); }
+  button { background:#262b33; color:var(--fg); border:1px solid var(--edge);
+           border-radius:6px; padding:7px 14px; cursor:pointer; font-size:13px; }
+  button:hover:not(:disabled) { border-color:var(--acc); }
+  button:disabled { opacity:.45; cursor:default; }
+  button.primary { background:var(--acc); border-color:var(--acc); color:#08121f; font-weight:600; }
+  button.danger  { border-color:var(--err); color:var(--err); }
+  .meta { color:var(--dim); font-size:12.5px; margin-top:8px; }
+  .meta b { color:var(--fg); font-weight:600; }
+  .meta code { color:var(--fg); font:12px ui-monospace,Menlo,monospace;
+               background:#111318; padding:1px 5px; border-radius:4px; }
+  .banner { border-radius:7px; padding:8px 12px; margin-top:10px; font-size:13px;
+            white-space:pre-wrap; }
+  .banner.ok   { background:#15301f; border:1px solid #24593a; color:#9fdcb5; }
+  .banner.err  { background:#33191b; border:1px solid #5e2a2e; color:#f0a8a8; }
+  .banner.warn { background:#33290f; border:1px solid #5e4c1e; color:#eccf8f; }
+  video { width:100%; max-height:520px; background:#000; border-radius:8px; display:block; }
+
+  .transport { display:flex; gap:6px; align-items:center; margin-top:10px; flex-wrap:wrap; }
+  .transport .readout { margin-left:auto; font:13px ui-monospace,Menlo,monospace; color:var(--dim); }
+  .transport .readout b { color:var(--fg); }
+
+  .tl { position:relative; height:56px; margin-top:12px; user-select:none;
+        touch-action:none; cursor:crosshair; }
+  .tl-track { position:absolute; left:0; right:0; top:18px; height:20px;
+              background:#0e1013; border:1px solid var(--edge); border-radius:5px; }
+  .tl-gaze  { position:absolute; top:42px; height:6px; background:#3a5f3a;
+              border-radius:3px; }
+  .tl-gaze-label { position:absolute; top:40px; right:0; font-size:10.5px; color:var(--dim); transform:translateY(8px); }
+  .tl-sel   { position:absolute; top:18px; height:20px; background:var(--sel);
+              border-top:1px solid var(--acc); border-bottom:1px solid var(--acc); opacity:.85; }
+  .tl-handle { position:absolute; top:12px; width:12px; height:32px; border-radius:4px;
+               background:var(--acc); cursor:ew-resize; z-index:3; }
+  .tl-handle::after { content:""; position:absolute; left:5px; top:6px; bottom:6px;
+               width:2px; background:#08121f; border-radius:1px; }
+  .tl-handle.end { background:#7ec8ff; }
+  .tl-play { position:absolute; top:14px; width:2px; height:28px; background:#ff6b6b; z-index:2; pointer-events:none; }
+  .tl-tick { position:absolute; top:2px; font-size:10.5px; color:var(--dim); }
+
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+           gap:10px; margin-top:12px; }
+  .stat { background:#171a1f; border:1px solid var(--edge); border-radius:8px; padding:8px 12px; }
+  .stat .k { color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
+  .stat .v { font:15px ui-monospace,Menlo,monospace; margin-top:3px; }
+  .stat .v small { color:var(--dim); font-size:11.5px; }
+
+  .prog { height:10px; background:#0e1013; border:1px solid var(--edge);
+          border-radius:5px; overflow:hidden; margin-top:10px; display:none; }
+  .prog > div { height:100%; width:0%; background:var(--acc); transition:width .3s; }
+  .phase { color:var(--dim); font-size:12.5px; margin-top:6px; }
+  pre.result { background:#111318; border:1px solid var(--edge); border-radius:7px;
+               padding:10px 12px; font-size:12px; overflow-x:auto; }
+  .kbd { color:var(--dim); font-size:12px; margin-top:6px; }
+  .kbd b { background:#262b33; border:1px solid var(--edge); border-radius:4px;
+           padding:0 5px; font:11.5px ui-monospace,monospace; color:var(--fg); }
+  .hidden { display:none !important; }
+  label.chk { color:var(--dim); font-size:12.5px; cursor:pointer; user-select:none; }
+
+  /* ---------- modal directory browser ---------- */
+  .modal-back { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:40;
+                display:flex; align-items:center; justify-content:center; }
+  .modal { width:min(880px, 94vw); max-height:86vh; display:flex; flex-direction:column;
+           background:var(--card); border:1px solid var(--edge); border-radius:12px;
+           box-shadow:0 18px 60px rgba(0,0,0,.5); }
+  .modal-head { display:flex; align-items:center; gap:10px; padding:12px 16px;
+                border-bottom:1px solid var(--edge); font-weight:650; }
+  .modal-head button { margin-left:auto; padding:4px 10px; }
+  .crumbs { display:flex; flex-wrap:wrap; align-items:center; gap:4px;
+            padding:8px 16px; border-bottom:1px solid var(--edge); font-size:12.5px; }
+  .crumbs a { color:var(--acc); cursor:pointer; text-decoration:none; padding:2px 4px;
+              border-radius:4px; }
+  .crumbs a:hover, .crumbs a:focus { background:#262b33; outline:none; }
+  .crumbs .sep { color:var(--dim); }
+  .crumbs .cur { color:var(--fg); font-weight:600; padding:2px 4px; }
+  .modal-body { display:flex; min-height:260px; max-height:52vh; }
+  .entry-list { flex:1.2; overflow-y:auto; padding:6px; outline:none; }
+  .entry { display:flex; align-items:center; gap:8px; padding:7px 10px;
+           border-radius:6px; cursor:pointer; font-size:13px; }
+  .entry:hover { background:#23272e; }
+  .entry.hi { background:var(--sel); }
+  .entry .ico { width:18px; text-align:center; }
+  .entry .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .entry .badge { font-size:10.5px; padding:1px 7px; border-radius:9px;
+                  border:1px solid #24593a; color:#9fdcb5; background:#15301f; }
+  .entry .badge.art { border-color:#4a5d7e; color:#a9c6f0; background:#1c2a40; }
+  .entry.dim { color:var(--dim); }
+  .entry.file { color:var(--dim); cursor:default; }
+  .list-msg { color:var(--dim); padding:18px 14px; font-size:13px; }
+  .inspect-pane { flex:1; border-left:1px solid var(--edge); overflow-y:auto;
+                  padding:12px 14px; font-size:12.5px; }
+  .inspect-pane h4 { margin:0 0 8px; font-size:13px; }
+  .ins-grid { display:grid; grid-template-columns:auto 1fr; gap:3px 12px; }
+  .ins-grid .k { color:var(--dim); white-space:nowrap; }
+  .ins-grid .v { font:12px ui-monospace,Menlo,monospace; word-break:break-all; }
+  .ins-problems { color:#f0a8a8; margin-top:8px; white-space:pre-wrap; }
+  .ins-hint-ok { color:#9fdcb5; } .ins-hint-bad { color:#eccf8f; }
+  .recents { padding:8px 16px; border-top:1px solid var(--edge); display:flex;
+             gap:6px; flex-wrap:wrap; align-items:center; }
+  .recents .lbl { color:var(--dim); font-size:11.5px; }
+  .chip { font-size:12px; padding:3px 10px; border-radius:12px; cursor:pointer;
+          border:1px solid var(--edge); background:#171a1f; color:var(--fg);
+          max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .chip:hover { border-color:var(--acc); }
+  .chip.dead { opacity:.4; cursor:default; }
+  .modal-foot { display:flex; align-items:center; gap:10px; padding:10px 16px;
+                border-top:1px solid var(--edge); }
+  .modal-status { color:var(--dim); font-size:12.5px; flex:1; white-space:pre-wrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="wbBar" style="margin-bottom:10px">
+    <a id="pipelineHome" class="wb-home" href="http://127.0.0.1:8000/"
+       style="text-decoration:none;border:1px solid #38424e;border-radius:7px;
+              padding:5px 11px;font-size:13px;display:inline-block">← Pipeline Home</a>
+    <a id="wbNext" class="hidden" href="#"
+       style="text-decoration:none;border:1px solid #2f6fd6;background:#2f6fd6;
+              color:#fff;border-radius:7px;padding:5px 11px;font-size:13px;
+              display:inline-block;margin-left:6px">Continue to object tracking →</a>
+  </div>
+  <h1>NEON Trim <small>frame-accurate synchronized trimming of Pupil Labs NEON recordings</small></h1>
+
+  <div class="card" id="loadCard">
+    <div class="row">
+      <button class="primary" id="chooseRecBtn">Choose NEON recording folder</button>
+      <input type="text" id="dirInput" readonly
+             placeholder="no recording selected — use the folder chooser" spellcheck="false">
+      <label class="chk"><input type="checkbox" id="advChk"> advanced: manual path</label>
+      <button id="loadBtn" class="hidden">Load</button>
+    </div>
+    <div class="meta" id="loadMeta"></div>
+    <div id="ariaPanel" class="hidden" style="margin-top:8px;border:1px solid #38424e;
+         border-radius:8px;padding:10px;font-size:13px"></div>
+    <div id="loadBanner"></div>
+  </div>
+
+  <div class="card hidden" id="playerCard">
+    <video id="vid" playsinline preload="auto"></video>
+    <div class="transport">
+      <button id="prevF" title="previous frame (←)">⏮ frame</button>
+      <button id="playBtn" title="play / pause (space)">▶ play</button>
+      <button id="nextF" title="next frame (→)">frame ⏭</button>
+      <button id="setStart" title="set start = current frame (I)">⌐ set start</button>
+      <button id="setEnd" title="set end = current frame (O)">set end ¬</button>
+      <button id="playSel" title="play the selection from its first frame">▶ play selection</button>
+      <span class="readout" id="readout">–</span>
+    </div>
+
+    <div class="tl" id="tl">
+      <div class="tl-track"></div>
+      <div class="tl-gaze" id="tlGaze"></div>
+      <span class="tl-gaze-label">gaze coverage</span>
+      <div class="tl-sel" id="tlSel"></div>
+      <div class="tl-handle" id="hStart" title="drag: first included frame"></div>
+      <div class="tl-handle end" id="hEnd" title="drag: last included frame"></div>
+      <div class="tl-play" id="tlPlay"></div>
+      <span class="tl-tick" style="left:0">0s</span>
+      <span class="tl-tick" style="right:0" id="tickEnd"></span>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="k">start frame</div><div class="v" id="stStart">–</div></div>
+      <div class="stat"><div class="k">end frame</div><div class="v" id="stEnd">–</div></div>
+      <div class="stat"><div class="k">selected duration</div><div class="v" id="stDur">–</div></div>
+      <div class="stat"><div class="k">retained frames</div><div class="v" id="stFrames">–</div></div>
+      <div class="stat"><div class="k">retained gaze samples</div><div class="v" id="stGaze">–</div></div>
+    </div>
+    <div id="gazeWarn"></div>
+    <div class="kbd">shortcuts: <b>space</b> play/pause · <b>←</b>/<b>→</b> frame step ·
+      <b>I</b> set start · <b>O</b> set end · playback is constrained to the selection</div>
+  </div>
+
+  <div class="card hidden" id="exportCard">
+    <div class="row">
+      <button id="chooseOutBtn">Choose output location</button>
+      <input type="text" id="outName" spellcheck="false" title="output folder name">
+      <button class="primary" id="exportBtn">Export trim</button>
+      <button class="danger hidden" id="cancelBtn">Cancel</button>
+    </div>
+    <div class="meta">Destination: <code id="outResolved">–</code></div>
+    <div id="outWarn"></div>
+    <div class="meta">Exports: trimmed MP4 (re-encoded, audio retained) + gaze.csv +
+      world_timestamps.csv + trim_manifest.json (versioned artifact contract).
+      Written atomically; source is never modified. Other NEON streams (fixations,
+      saccades, blinks, IMU, 3D eye states, events) are <b>omitted</b> — this is a
+      trim subset, not a full export.</div>
+    <div class="prog" id="prog"><div id="progBar"></div></div>
+    <div class="phase" id="phase"></div>
+    <div id="exportBanner"></div>
+    <div id="exportResult"></div>
+  </div>
+</div>
+
+<!-- ---------- modal directory browser ---------- -->
+<div class="modal-back hidden" id="modalBack">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-head">
+      <span id="modalTitle">Choose folder</span>
+      <button id="modalClose" aria-label="close dialog">✕ close</button>
+    </div>
+    <nav class="crumbs" id="crumbs" aria-label="breadcrumbs"></nav>
+    <div class="modal-body">
+      <div class="entry-list" id="entryList" role="listbox" tabindex="0"
+           aria-label="folders"></div>
+      <div class="inspect-pane" id="inspectPane" aria-live="polite"></div>
+    </div>
+    <div class="recents hidden" id="recentsRow"></div>
+    <div class="modal-foot">
+      <span class="modal-status" id="modalStatus"></span>
+      <button class="primary" id="modalSelect" disabled>Select</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const vid = $("vid");
+
+let R = null;          // loaded recording info from /api/load
+let pts = [];          // frame index -> seconds
+let N = 0, DUR = 0;
+let sel = { s: 0, e: 0 };
+let outParent = null;  // chosen output parent directory
+let outNameDirty = false;
+let job = null, pollTimer = null;
+
+// ---------- helpers ----------
+function frameForTime(t) {              // largest i with pts[i] <= t
+  if (t <= 0) return 0;
+  let lo = 0, hi = N - 1;
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; (pts[m] <= t) ? lo = m : hi = m - 1; }
+  return lo;
+}
+function boundary(i) { return (i + 1 < N) ? pts[i + 1] : DUR; }   // end of frame i's display interval
+function seekTime(i) {                  // a time safely inside frame i's interval
+  const g = boundary(i) - pts[i];
+  return Math.min(pts[i] + Math.max(0.004, g * 0.3), Math.max(0, DUR - 0.001));
+}
+function curFrame() { return frameForTime(vid.currentTime + 1e-4); }
+function fmtT(t) { return t.toFixed(3) + "s"; }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function banner(el, cls, text) { el.innerHTML = text ? `<div class="banner ${cls}">${esc(text)}</div>` : ""; }
+async function jfetch(url, opts) {
+  const r = await fetch(url, opts);
+  if (!r.ok) {
+    let d; try { d = await r.json(); } catch { d = null; }
+    const msg = d && d.detail ? (typeof d.detail === "string" ? d.detail
+      : (d.detail.message || JSON.stringify(d.detail))) : r.statusText;
+    const e = new Error(msg); e.detail = d && d.detail; throw e;
+  }
+  return r.json();
+}
+
+// =========================================================================
+// modal directory browser (shared by recording + output choosers)
+// =========================================================================
+const modal = { mode: null, path: null, listing: null, hi: -1, reqSeq: 0,
+                inspSeq: 0, lastFocus: null };
+let NROOTS = 1;
+jfetch("/api/config").then(d => { NROOTS = d.roots.length; }).catch(() => {});
+
+$("chooseRecBtn").onclick = () => openModal("rec");
+$("chooseOutBtn").onclick = () => openModal("out");
+$("modalClose").onclick = closeModal;
+$("modalBack").addEventListener("pointerdown", e => {
+  if (e.target === $("modalBack")) closeModal();
+});
+
+function openModal(mode) {
+  modal.mode = mode;
+  modal.lastFocus = document.activeElement;
+  $("modalTitle").textContent = mode === "rec"
+    ? "Choose NEON recording folder" : "Choose output location (parent folder)";
+  $("modalSelect").textContent = mode === "rec"
+    ? "Select this recording" : "Use this folder as output location";
+  $("modalBack").classList.remove("hidden");
+  $("inspectPane").innerHTML = mode === "rec"
+    ? "<div class='list-msg'>highlight a folder to inspect it</div>" : "";
+  $("inspectPane").style.display = mode === "rec" ? "" : "none";
+  loadRecents();
+  const start = mode === "out"
+    ? (outParent || (R && R.last_out_parent) || (R ? parentOf(R.dir) : ""))
+    : (localStorage.getItem("neon_trim_browse") || "");
+  browseTo(start || "");
+  setTimeout(() => $("entryList").focus(), 50);
+}
+function closeModal() {
+  $("modalBack").classList.add("hidden");
+  modal.mode = null;
+  if (modal.lastFocus) modal.lastFocus.focus();
+}
+function parentOf(p) { return p.replace(/\/[^/]+\/?$/, "") || "/"; }
+
+async function loadRecents() {
+  const row = $("recentsRow");
+  if (modal.mode !== "rec") { row.classList.add("hidden"); return; }
+  try {
+    const d = await jfetch("/api/recents");
+    if (!d.recents.length) { row.classList.add("hidden"); return; }
+    row.classList.remove("hidden");
+    row.innerHTML = "<span class='lbl'>recent:</span>" + d.recents.map((r, i) =>
+      `<button class="chip ${r.exists && r.is_recording ? "" : "dead"}"
+        data-path="${esc(r.path)}" title="${esc(r.path)}"
+        ${r.exists && r.is_recording ? "" : "disabled"}>${esc(r.name)}</button>`).join("");
+    row.querySelectorAll(".chip:not(.dead)").forEach(ch =>
+      ch.onclick = () => selectRecording(ch.dataset.path));
+  } catch { row.classList.add("hidden"); }
+}
+
+async function browseTo(path) {
+  const seq = ++modal.reqSeq;
+  modal.hi = -1;
+  $("modalSelect").disabled = true;
+  $("entryList").innerHTML = "<div class='list-msg'>loading…</div>";
+  $("modalStatus").textContent = "";
+  let d;
+  try {
+    d = await jfetch("/api/browse" + (path ? "?path=" + encodeURIComponent(path) : ""));
+  } catch (e) {
+    if (seq !== modal.reqSeq) return;
+    // clear stale navigation state so keyboard/select act on nothing, and
+    // drop a possibly-dead remembered path (e.g. roots changed)
+    modal.listing = null; modal.path = null; modal.hi = -1;
+    if (path && path === localStorage.getItem("neon_trim_browse"))
+      localStorage.removeItem("neon_trim_browse");
+    $("entryList").innerHTML = `<div class='list-msg'>⚠ ${esc(e.message)}</div>`;
+    renderCrumbs(null);
+    updateModalFoot();
+    return;
+  }
+  if (seq !== modal.reqSeq) return;
+  modal.inspSeq++;                      // invalidate in-flight inspects
+  modal.path = d.path; modal.listing = d;
+  if (d.path && modal.mode === "rec") localStorage.setItem("neon_trim_browse", d.path);
+  renderCrumbs(d);
+  renderEntries(d);
+  updateModalFoot();
+  if (modal.mode === "rec" && d.path) inspectPath(d.path, true);
+}
+
+function renderCrumbs(d) {
+  const c = $("crumbs");
+  if (!d || !d.breadcrumbs || !d.breadcrumbs.length) {
+    // always recoverable: link back to the configured roots listing
+    c.innerHTML = "<a tabindex='0' data-path=''>⬑ browse roots</a>";
+    c.querySelectorAll("a").forEach(a => {
+      a.onclick = () => browseTo("");
+      a.onkeydown = e => { if (e.key === "Enter") browseTo(""); };
+    });
+    return;
+  }
+  const parts = [];
+  d.breadcrumbs.forEach((b, i) => {
+    if (i) parts.push("<span class='sep'>/</span>");
+    if (i === d.breadcrumbs.length - 1)
+      parts.push(`<span class="cur">${esc(b.name)}</span>`);
+    else
+      parts.push(`<a tabindex="0" data-path="${esc(b.path)}">${esc(b.name)}</a>`);
+  });
+  if (d.parent)
+    parts.unshift(`<a tabindex="0" data-path="${esc(d.parent)}" title="parent folder">⬑ up</a><span class="sep">·</span>`);
+  else if (d.path && NROOTS > 1)
+    parts.unshift(`<a tabindex="0" data-path="" title="all browse roots">⬑ roots</a><span class="sep">·</span>`);
+  c.innerHTML = parts.join("");
+  c.querySelectorAll("a").forEach(a => {
+    a.onclick = () => browseTo(a.dataset.path);
+    a.onkeydown = e => { if (e.key === "Enter") browseTo(a.dataset.path); };
+  });
+}
+
+function renderEntries(d) {
+  const list = $("entryList");
+  if (d.error === "inaccessible") {
+    list.innerHTML = "<div class='list-msg'>⚠ permission denied — this folder is not readable</div>"; return;
+  }
+  if (d.error === "not_found") {
+    list.innerHTML = "<div class='list-msg'>⚠ folder does not exist</div>"; return;
+  }
+  if (d.error) {
+    list.innerHTML = `<div class='list-msg'>⚠ ${esc(d.error)}</div>`; return;
+  }
+  const dirs = d.entries.filter(e => e.is_dir);
+  const files = d.entries.filter(e => !e.is_dir);
+  const showFiles = modal.mode === "rec";
+  if (!dirs.length && (!showFiles || !files.length)) {
+    list.innerHTML = `<div class='list-msg'>${files.length ? "no subfolders here" : "empty folder"}</div>`;
+    return;
+  }
+  list.innerHTML = dirs.map((e, i) => `
+    <div class="entry ${e.inaccessible ? "dim" : ""}" role="option" id="ent${i}"
+         data-i="${i}" data-path="${esc(e.path)}" aria-selected="false">
+      <span class="ico">${e.inaccessible ? "🔒" : "📁"}</span>
+      <span class="nm">${esc(e.name)}</span>
+      ${e.is_recording ? '<span class="badge">NEON recording</span>' : ""}
+    </div>`).join("")
+    + (modal.mode === "rec" ? files.slice(0, 40).map(e =>
+      `<div class="entry file"><span class="ico">·</span><span class="nm">${esc(e.name)}</span></div>`).join("") : "");
+  list.querySelectorAll(".entry[data-i]").forEach(el => {
+    el.onclick = () => highlight(+el.dataset.i);
+    el.ondblclick = () => browseTo(el.dataset.path);
+  });
+}
+
+function dirEntries() { return (modal.listing && modal.listing.entries || []).filter(e => e.is_dir); }
+
+function highlight(i) {
+  const ents = dirEntries();
+  if (!ents.length) return;
+  modal.hi = Math.max(0, Math.min(i, ents.length - 1));
+  document.querySelectorAll(".entry.hi").forEach(el => { el.classList.remove("hi"); el.setAttribute("aria-selected", "false"); });
+  const el = document.getElementById("ent" + modal.hi);
+  if (el) { el.classList.add("hi"); el.setAttribute("aria-selected", "true");
+            el.scrollIntoView({ block: "nearest" });
+            $("entryList").setAttribute("aria-activedescendant", el.id); }
+  updateModalFoot();
+  if (modal.mode === "rec") inspectPath(ents[modal.hi].path, false);
+}
+
+function updateModalFoot() {
+  const ents = dirEntries();
+  const hiEnt = modal.hi >= 0 ? ents[modal.hi] : null;
+  if (modal.mode === "out") {
+    $("modalSelect").disabled = !modal.path;
+    $("modalStatus").textContent = modal.path
+      ? "output will be created inside: " + modal.path : "";
+    return;
+  }
+  const target = hiEnt || null;
+  if (target && target.is_recording) {
+    $("modalSelect").disabled = false;
+    $("modalStatus").textContent = "selected: " + target.name;
+  } else if (!target && modal.listing && modal.listing.curIsRecording) {
+    $("modalSelect").disabled = false;
+    $("modalStatus").textContent = "this folder is a NEON recording";
+  } else {
+    $("modalSelect").disabled = true;
+    $("modalStatus").textContent = target
+      ? (target.inaccessible ? "folder is not readable"
+         : "not a NEON recording — double-click to open it")
+      : "highlight a recording, or navigate into a folder";
+  }
+}
+
+$("modalSelect").onclick = () => {
+  if (modal.mode === "out") {
+    outParent = modal.path;
+    closeModal();
+    refreshOutDest();
+    return;
+  }
+  const ents = dirEntries();
+  const t = modal.hi >= 0 ? ents[modal.hi] : null;
+  if (t && t.is_recording) selectRecording(t.path);
+  else if (modal.listing && modal.listing.curIsRecording) selectRecording(modal.path);
+};
+
+// inspection pane (fast structural inspect; debounced on highlight)
+let inspTimer = null;
+function inspectPath(path, isCurrentDir) {
+  clearTimeout(inspTimer);
+  // claim the sequence NOW: any later navigation/highlight invalidates this
+  // request even while it is still sitting in the debounce timer
+  const seq = ++modal.inspSeq;
+  inspTimer = setTimeout(async () => {
+    if (seq !== modal.inspSeq) return;
+    const pane = $("inspectPane");
+    pane.innerHTML = "<div class='list-msg'>inspecting…</div>";
+    let d;
+    try { d = await jfetch("/api/inspect?path=" + encodeURIComponent(path)); }
+    catch (e) { if (seq === modal.inspSeq) pane.innerHTML = `<div class='list-msg'>⚠ ${esc(e.message)}</div>`; return; }
+    if (seq !== modal.inspSeq) return;
+    if (isCurrentDir && modal.listing) {
+      modal.listing.curIsRecording = d.is_recording;
+      updateModalFoot();
+    }
+    renderInspect(pane, d);
+  }, 220);
+}
+
+function renderInspect(pane, d) {
+  const b = d.bundle;
+  let html = `<h4>${esc(d.path.split("/").pop() || d.path)}</h4>`;
+  if (d.is_recording && b) {
+    const rows = [
+      ["recording", b.recording_name || "—"],
+      ["wearer", b.wearer_name || "—"],
+      ["recording id", b.recording_id ? b.recording_id.slice(0, 13) + "…" : "—"],
+      ["scene video", b.video_path.split("/").pop()],
+      ["duration", b.duration_s != null ? b.duration_s.toFixed(3) + " s" : "?"],
+      ["resolution", b.width ? `${b.width}×${b.height}` : "?"],
+      ["frames (header)", b.header_frame_count ?? "?"],
+      ["world rows", b.world_rows ?? "?"],
+      ["gaze rows", b.gaze_rows ?? "?"],
+      ["audio", b.has_audio == null ? "?" : (b.has_audio ? "yes" : "no")],
+    ];
+    if (b.is_trimmed_artifact) rows.push(["type", "trimmed artifact (re-trim OK)"]);
+    html += "<div class='ins-grid'>" + rows.map(([k, v]) =>
+      `<span class="k">${esc(k)}</span><span class="v">${esc(String(v))}</span>`).join("") + "</div>";
+    html += `<div class="${d.sync_hint === "likely_ok" ? "ins-hint-ok" : "ins-hint-bad"}" style="margin-top:8px">
+      ${d.sync_hint === "likely_ok" ? "✓" : "△"} sync (structural): ${esc(d.sync_hint)} — ${esc(d.sync_hint_detail)}</div>`;
+  } else {
+    html += `<div class="ins-problems">${esc(d.problems.join("\n") || "not a NEON recording")}</div>`;
+    if (d.child_recordings.length) {
+      html += `<div style="margin-top:10px"><b>recordings inside:</b></div>`;
+      html += d.child_recordings.slice(0, 12).map(c =>
+        `<button class="chip" style="margin-top:6px" data-path="${esc(c.path)}">${esc(c.name)}</button>`).join(" ");
+    }
+  }
+  pane.innerHTML = html;
+  pane.querySelectorAll(".chip").forEach(ch =>
+    ch.onclick = () => selectRecording(ch.dataset.path));
+}
+
+// keyboard navigation
+$("entryList").addEventListener("keydown", e => {
+  const ents = dirEntries();
+  if (e.key === "ArrowDown") { e.preventDefault(); highlight(modal.hi + 1); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); highlight(modal.hi - 1); }
+  else if (e.key === "Enter") {
+    e.preventDefault();
+    const t = modal.hi >= 0 ? ents[modal.hi] : null;
+    if (!t) return;
+    if (modal.mode === "rec" && t.is_recording) selectRecording(t.path);
+    else browseTo(t.path);
+  }
+  else if (e.key === "Backspace") {
+    e.preventDefault();
+    if (modal.listing && modal.listing.parent) browseTo(modal.listing.parent);
+    else if (modal.listing && modal.listing.path && NROOTS > 1) browseTo("");
+  }
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && modal.mode) closeModal();
+});
+
+async function selectRecording(path) {
+  closeModal();
+  await loadRec(path);
+}
+
+// =========================================================================
+// recording load
+// =========================================================================
+$("advChk").onchange = () => {
+  const adv = $("advChk").checked;
+  $("dirInput").readOnly = !adv;
+  $("loadBtn").classList.toggle("hidden", !adv);
+  if (adv) $("dirInput").focus();
+};
+$("loadBtn").onclick = () => loadRec($("dirInput").value.trim());
+$("dirInput").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !$("dirInput").readOnly) loadRec($("dirInput").value.trim());
+});
+
+async function loadRec(dir) {
+  if (!dir) return;
+  banner($("loadBanner"), "", "");
+  $("loadMeta").textContent = "loading…";
+  try {
+    R = await jfetch("/api/load", { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dir }) });
+  } catch (e) {
+    $("loadMeta").textContent = "";
+    if (e.detail && e.detail.aria) { offerAriaPrepare(dir, e.detail); return; }
+    let msg = "Load failed: " + e.message;
+    if (e.detail && e.detail.problems) msg += "\n" + e.detail.problems.join("\n");
+    if (e.detail && e.detail.child_recordings && e.detail.child_recordings.length)
+      msg += "\nThis folder contains recordings: " +
+             e.detail.child_recordings.map(c => c.name).join(", ") +
+             " — pick one in the folder chooser.";
+    banner($("loadBanner"), "err", msg);
+    return;
+  }
+  $("dirInput").value = R.dir;
+  pts = R.pts_s; N = pts.length; DUR = R.video.duration_s;
+  sel = { s: 0, e: N - 1 };
+  outNameDirty = false;
+  outParent = R.last_out_parent || parentOf(R.dir);
+  // sever any previous export job's UI linkage: its poll must not repaint
+  // progress/success over the newly loaded recording
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  job = null;
+  $("cancelBtn").classList.add("hidden");
+
+  const v = R.video, g = R.gaze;
+  $("loadMeta").innerHTML =
+    `<b>${esc(v.filename)}</b> — ${v.width}×${v.height} ${esc(v.codec)}, ` +
+    `<b>${v.n_frames}</b> frames, ${fmtT(v.duration_s)}` +
+    (v.has_audio ? `, audio ${esc(v.audio)}` : ", no audio") +
+    ` · world rows: <b>${R.world_rows}</b> · gaze rows: <b>${g.rows}</b>` +
+    (g.first_rel_s != null ? ` (${fmtT(g.first_rel_s)} → ${fmtT(g.last_rel_s)})` : "") +
+    (R.wearer_name ? ` · wearer <b>${esc(R.wearer_name)}</b>` : "") +
+    (R.recording_name ? ` · ${esc(R.recording_name)}` : "") +
+    (R.is_trimmed_artifact ? " · <b>trimmed artifact</b>" : "");
+
+  // source badge + Aria specifics (NEON recordings are unaffected)
+  const src = R.source;
+  const ap = $("ariaPanel");
+  if (src && src.system === "project_aria") {
+    ap.classList.remove("hidden");
+    ap.innerHTML =
+      `<div><b>${esc(src.badge)}</b> — ${esc(src.artifact_type)}</div>
+       <div class="meta">recording <b>${esc(R.recording_id || "?")}</b>` +
+      (src.task ? ` · ${esc(src.task)}` : "") +
+      ` · gaze model <b>${esc(src.gaze_model || "?")}</b>` +
+      (src.gaze_projection_ok != null
+        ? ` · ${src.gaze_projection_ok}/${src.gaze_rows_total} gaze rows projected into the image` : "") +
+      `</div><div class="meta">frame timestamps: <b>${esc(src.timestamp_domain)}</b>` +
+      ` · orientation <b>${esc(src.orientation || "?")}</b>` +
+      ` · audio ${src.audio_present ? "present" : "not preserved"}` +
+      (src.cache_dir ? ` · cache ${src.cache_reused ? "reused" : "built"}` : "") +
+      `</div><div class="meta">${esc(src.timestamp_note || "")}</div>`;
+  } else {
+    ap.classList.add("hidden");
+  }
+
+  const s = R.sync;
+  if (s.ok) {
+    banner($("loadBanner"), "ok", "✓ sync verified — " + s.message);
+  } else {
+    banner($("loadBanner"), "err",
+      "✗ SYNCHRONIZATION NOT ESTABLISHED — export is blocked.\n" + s.message);
+  }
+  if (R.warnings && R.warnings.length)
+    $("loadBanner").innerHTML += `<div class="banner warn">${esc(R.warnings.join("\n"))}</div>`;
+
+  vid.src = "/api/video?dir=" + encodeURIComponent(R.dir);
+  $("playerCard").classList.remove("hidden");
+  $("exportCard").classList.remove("hidden");
+  $("exportBtn").disabled = !s.ok;
+  $("tickEnd").textContent = fmtT(DUR);
+  const gz = $("tlGaze");
+  if (g.first_rel_s != null) {
+    gz.style.left = (100 * Math.max(0, g.first_rel_s) / DUR) + "%";
+    gz.style.width = (100 * Math.max(0, Math.min(DUR, g.last_rel_s) - Math.max(0, g.first_rel_s)) / DUR) + "%";
+  } else { gz.style.width = "0"; }
+  $("exportResult").innerHTML = ""; banner($("exportBanner"), "", "");
+  $("prog").style.display = "none"; $("phase").textContent = "";
+  updateSelectionUI();
+  renderPlayhead();
+}
+
+// =========================================================================
+// transport (unchanged, review-hardened)
+// =========================================================================
+$("playBtn").onclick = togglePlay;
+function togglePlay() {
+  if (vid.paused) {
+    const t = vid.currentTime;
+    // restart from the selection start when outside it OR parked at/after the
+    // last selected frame (frame-based compare, so replay-after-end works)
+    if (t < pts[sel.s] - 0.002 || t >= pts[sel.e] - 0.002) vid.currentTime = seekTime(sel.s);
+    vid.play();
+  } else vid.pause();
+}
+$("playSel").onclick = () => { vid.currentTime = seekTime(sel.s); vid.play(); };
+$("prevF").onclick = () => stepFrame(-1);
+$("nextF").onclick = () => stepFrame(1);
+function stepFrame(d) {
+  vid.pause();
+  const i = Math.max(0, Math.min(N - 1, curFrame() + d));
+  vid.currentTime = seekTime(i);
+}
+$("setStart").onclick = () => { setSel(curFrame(), null); };
+$("setEnd").onclick = () => { setSel(null, curFrame()); };
+
+vid.addEventListener("play", () => {
+  $("playBtn").textContent = "⏸ pause";
+  // clamp ANY play path (context menu, media keys, PiP) into the selection
+  if (N && (vid.currentTime < pts[sel.s] - 0.002 ||
+            vid.currentTime >= boundary(sel.e) - 0.002))
+    vid.currentTime = seekTime(sel.s);
+});
+vid.addEventListener("pause", () => { $("playBtn").textContent = "▶ play"; });
+
+// constrain playback to the selection: checked per display frame while
+// playing (rAF, below) with timeupdate as a hidden-tab fallback
+function clampToSelection() {
+  if (!vid.paused && N && vid.currentTime >= boundary(sel.e) - 0.015) {
+    vid.pause();
+    vid.currentTime = seekTime(sel.e);
+  }
+}
+vid.addEventListener("timeupdate", clampToSelection);
+
+document.addEventListener("keydown", e => {
+  // leave browser shortcuts (Ctrl/Cmd/Alt combos) alone; ignore while typing
+  // or while the folder-chooser modal is open
+  if (!N || modal.mode || e.ctrlKey || e.metaKey || e.altKey || e.target.tagName === "INPUT") return;
+  if (e.code === "Space") { e.preventDefault(); togglePlay(); }
+  else if (e.key === "ArrowLeft") { e.preventDefault(); stepFrame(-1); }
+  else if (e.key === "ArrowRight") { e.preventDefault(); stepFrame(1); }
+  else if (e.key === "i" || e.key === "I") setSel(curFrame(), null);
+  else if (e.key === "o" || e.key === "O") setSel(null, curFrame());
+});
+
+// ---------- playhead / readout ----------
+// event-driven (rAF alone is throttled in hidden tabs); rAF only while playing
+function renderPlayhead() {
+  if (!N) return;
+  const f = curFrame();
+  $("readout").innerHTML = `t=<b>${vid.currentTime.toFixed(3)}</b>s · frame <b>${f}</b> / ${N - 1}`;
+  $("tlPlay").style.left = (100 * Math.min(vid.currentTime, DUR) / DUR) + "%";
+}
+vid.addEventListener("seeked", renderPlayhead);
+vid.addEventListener("timeupdate", renderPlayhead);
+setInterval(renderPlayhead, 250);
+vid.addEventListener("play", function loopStart() {
+  (function loop() {
+    if (!vid.paused) { clampToSelection(); renderPlayhead(); requestAnimationFrame(loop); }
+  })();
+});
+
+// ---------- timeline (unchanged, review-hardened) ----------
+const tl = $("tl");
+let drag = null;                        // "s" | "e" | "seek"
+let dragOffX = 0;                       // grab offset: keeps the handle under
+                                        // the cursor instead of re-snapping
+let lastScrub = 0;
+
+function xToTime(clientX) {
+  const r = tl.getBoundingClientRect();
+  return Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * DUR;
+}
+tl.addEventListener("pointerdown", e => {
+  if (!N) return;
+  tl.setPointerCapture(e.pointerId);
+  const r = tl.getBoundingClientRect();
+  const xs = r.left + r.width * pts[sel.s] / DUR;
+  const xe = r.left + r.width * boundary(sel.e) / DUR;
+  const dx = Math.abs(e.clientX - xs), de = Math.abs(e.clientX - xe);
+  if (dx <= 14 && dx <= de) { drag = "s"; dragOffX = xs - e.clientX; }
+  else if (de <= 14)        { drag = "e"; dragOffX = xe - e.clientX; }
+  else { drag = "seek"; dragOffX = 0; onDrag(e); }
+  // handle grabs do NOT commit on pointerdown — only on actual movement
+});
+tl.addEventListener("pointermove", e => { if (drag) onDrag(e); });
+tl.addEventListener("pointerup", e => {
+  if (!drag) return;
+  onDrag(e, true);
+  drag = null;
+});
+tl.addEventListener("pointercancel", () => { drag = null; });
+tl.addEventListener("lostpointercapture", () => { drag = null; });
+
+function onDrag(e, final = false) {
+  const t = xToTime(e.clientX + dragOffX);
+  if (drag === "s") {
+    const f = frameForTime(Math.min(t, DUR - 1e-6));
+    setSel(Math.min(f, sel.e), null, !final);
+  } else if (drag === "e") {
+    // the end handle sits at boundary(e): map the boundary time back to the
+    // last INCLUDED frame (frame whose interval ends at t)
+    const f = frameForTime(Math.min(Math.max(t, 1e-6), DUR - 1e-6) - 1e-6);
+    setSel(null, Math.max(f, sel.s), !final);
+  } else {
+    vid.pause();
+    const f = frameForTime(Math.min(t, DUR - 1e-6));
+    const now = performance.now();
+    if (final || now - lastScrub > 80) { lastScrub = now; vid.currentTime = seekTime(f); }
+  }
+  if (drag === "s" || drag === "e") {
+    // live scrub preview of the handle's frame
+    const now = performance.now();
+    if (final || now - lastScrub > 90) {
+      lastScrub = now; vid.pause();
+      vid.currentTime = seekTime(drag === "s" ? sel.s : sel.e);
+    }
+  }
+}
+
+function setSel(s, e, transient = false) {
+  if (s !== null) sel.s = Math.max(0, Math.min(s, N - 1));
+  if (e !== null) sel.e = Math.max(0, Math.min(e, N - 1));
+  if (sel.s > sel.e) { if (s !== null) sel.e = sel.s; else sel.s = sel.e; }
+  updateSelectionUI(transient);
+}
+
+let gazeTimer = null;
+function updateSelectionUI(transient = false) {
+  const t0 = pts[sel.s], t1 = boundary(sel.e);
+  $("tlSel").style.left = (100 * t0 / DUR) + "%";
+  $("tlSel").style.width = (100 * (t1 - t0) / DUR) + "%";
+  $("hStart").style.left = `calc(${100 * t0 / DUR}% - 6px)`;
+  $("hEnd").style.left = `calc(${100 * t1 / DUR}% - 6px)`;
+  $("stStart").innerHTML = `${sel.s} <small>@ ${fmtT(t0)}</small>`;
+  $("stEnd").innerHTML = `${sel.e} <small>@ ${fmtT(pts[sel.e])}</small>`;
+  $("stDur").textContent = fmtT(t1 - t0);
+  $("stFrames").textContent = (sel.e - sel.s + 1);
+  if (!outNameDirty && R)
+    $("outName").value = `${R.dir.split("/").pop()}_trim_f${sel.s}-f${sel.e}`;
+  refreshOutDest();
+  $("stGaze").innerHTML = `<small>counting…</small>`;
+  clearTimeout(gazeTimer);
+  gazeTimer = setTimeout(fetchGazeCount, transient ? 350 : 120);
+}
+
+let gazeReq = 0;                        // drop out-of-order responses
+async function fetchGazeCount() {
+  if (!R) return;
+  const myReq = ++gazeReq;
+  const q = `dir=${encodeURIComponent(R.dir)}&start_frame=${sel.s}&end_frame=${sel.e}`;
+  try {
+    const d = await jfetch("/api/gaze_count?" + q);
+    if (myReq !== gazeReq) return;      // stale — a newer request superseded us
+    $("stGaze").textContent = d.gaze_count;
+    banner($("gazeWarn"), d.gaze_count === 0 ? "warn" : "",
+      d.gaze_count === 0 ? "⚠ the selected interval contains no gaze samples" : "");
+  } catch (e) { if (myReq === gazeReq) $("stGaze").innerHTML = `<small>?</small>`; }
+}
+
+// =========================================================================
+// output destination + export
+// =========================================================================
+$("outName").addEventListener("input", () => { outNameDirty = true; refreshOutDest(); });
+
+let outCheckTimer = null, outCheckSeq = 0, outOk = false;
+function outResolvedPath() {
+  const name = $("outName").value.trim();
+  return outParent && name ? outParent.replace(/\/$/, "") + "/" + name : null;
+}
+function refreshOutDest() {
+  const dest = outResolvedPath();
+  $("outResolved").textContent = dest || "–";
+  banner($("outWarn"), "", "");
+  outOk = false;
+  if (!dest || !R) return;
+  clearTimeout(outCheckTimer);
+  outCheckTimer = setTimeout(async () => {
+    const seq = ++outCheckSeq;
+    try {
+      const d = await jfetch(`/api/out_check?dir=${encodeURIComponent(R.dir)}&path=${encodeURIComponent(dest)}`);
+      if (seq !== outCheckSeq) return;
+      $("outResolved").textContent = d.resolved || dest;
+      if (!d.authorized) {
+        banner($("outWarn"), "err", "✗ destination is outside the configured browse roots — choose another location");
+      } else if (d.inside_source) {
+        banner($("outWarn"), "err", "✗ destination is inside the source recording — choose another location");
+      } else if (d.exists) {
+        banner($("outWarn"), "warn", "⚠ destination already exists — export will refuse to overwrite it; pick a different name");
+      } else {
+        outOk = true;
+      }
+    } catch (e) { if (seq === outCheckSeq) banner($("outWarn"), "warn", "could not verify destination: " + e.message); }
+  }, 250);
+}
+
+$("exportBtn").onclick = startExport;
+$("cancelBtn").onclick = async () => {
+  if (job) await fetch(`/api/export/${job}/cancel`, { method: "POST" });
+};
+
+async function startExport() {
+  if ($("exportBtn").disabled) return;
+  $("exportBtn").disabled = true;       // BEFORE any await: kills double-click
+  banner($("exportBanner"), "", ""); $("exportResult").innerHTML = "";
+  const dest = outResolvedPath();
+  if (!dest) {
+    banner($("exportBanner"), "err", "choose an output location first");
+    $("exportBtn").disabled = !R.sync.ok; return;
+  }
+  const body = { dir: R.dir, start_frame: sel.s, end_frame: sel.e, out_dir: dest };
+  let r;
+  try {
+    r = await jfetch("/api/export", { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  } catch (e) {
+    banner($("exportBanner"), "err", "Export refused: " + e.message);
+    $("exportBtn").disabled = !R.sync.ok;
+    return;
+  }
+  job = r.job_id;
+  $("cancelBtn").classList.remove("hidden");
+  $("prog").style.display = "block"; $("progBar").style.width = "0%";
+  if (pollTimer) clearInterval(pollTimer);
+  pollSeq = 0; pollRendered = 0;
+  pollTimer = setInterval(pollJob, 500);
+}
+
+let pollSeq = 0, pollRendered = 0;      // drop out-of-order status responses
+async function pollJob() {
+  if (!job) return;                     // job severed (new recording loaded)
+  const seq = ++pollSeq;
+  const r = await fetch(`/api/export/${job}`);
+  if (!r.ok) return;
+  const d = await r.json();
+  if (seq <= pollRendered) return;      // an older in-flight poll landed late
+  pollRendered = seq;
+  $("progBar").style.width = (100 * d.progress) + "%";
+  $("phase").textContent = d.state === "running" ? `${d.phase} — ${(100 * d.progress).toFixed(0)}%` : "";
+  if (d.state === "running") return;
+  clearInterval(pollTimer);
+  $("exportBtn").disabled = !R.sync.ok; $("cancelBtn").classList.add("hidden");
+  if (d.state === "done") {
+    $("progBar").style.width = "100%";
+    const m = d.manifest, c = m.counts, ok = m.validation.filter(v => v.ok).length;
+    banner($("exportBanner"), "ok",
+      `✓ export complete → ${m.output_directory}\n` +
+      `artifact ${m.artifact_id.slice(0, 12)}… (schema ${m.schema_version}) · ` +
+      `frames ${c.output_frames}/${c.original_frames} · gaze rows ` +
+      `${c.retained_gaze_rows}/${c.original_gaze_rows} · world rows ` +
+      `${c.output_world_rows}/${c.original_world_rows} · ` +
+      `validation ${ok}/${m.validation.length} checks passed`);
+    $("exportResult").innerHTML = "<pre class='result'>" +
+      esc(JSON.stringify({ artifact_id: m.artifact_id, files: m.files,
+        selection: m.selection, counts: m.counts,
+        synchronization: { method: m.synchronization.method,
+          offset_ms: m.synchronization.offset_ms, spread_ms: m.synchronization.spread_ms },
+        omitted_files: m.omitted_files.files, validation: m.validation },
+        null, 2)) + "</pre>";
+    wbOfferNext(m.output_directory);    // hand the trim artifact onward
+    refreshOutDest();                   // the destination now exists → warn
+  } else {
+    banner($("exportBanner"), d.state === "cancelled" ? "warn" : "err",
+      (d.state === "cancelled" ? "Export cancelled — " : "Export failed — ") +
+      (d.error || "unknown error") + "\nNo partial output was left behind.");
+    $("prog").style.display = "none"; $("phase").textContent = "";
+  }
+}
+
+/* ---------------- Project Aria preparation ----------------
+   A Project Aria download folder cannot be trimmed directly: the VRS
+   recording must first be prepared into a canonical artifact. All native
+   Aria work happens in an isolated helper process on the server. */
+let ariaJob = null, ariaTimer = null;
+function ariaOutFor(dir) {
+  return dir.replace(/\/+$/, "") + "_prepared_aria";
+}
+async function offerAriaPrepare(dir, detail) {
+  const p = $("ariaPanel");
+  p.classList.remove("hidden");
+  let info = "";
+  try {
+    const d = await jfetch("/api/inspect?path=" + encodeURIComponent(dir));
+    const a = d.aria || {};
+    const rv = (d.receipt_validation || []);
+    const okAll = rv.every(v => v.ok);
+    const integrity = a.has_receipt
+      ? `download receipt ${okAll ? "✓ verified" : "⚠ problems"}`
+      : `source integrity ${okAll ? "✓ SHA-256 recorded on prepare" : "⚠ problems"}`;
+    info = `<div><b>${esc(d.kind_label || "Project Aria recording")}</b></div>
+      <div class="meta">recording ${esc(a.recording_id || "?")} ·
+      ${esc(a.dataset || "")} ${esc(a.release || "")} ·
+      ${integrity}</div>`;
+  } catch (e) { info = `<div class="meta">${esc(String(e.message))}</div>`; }
+  p.innerHTML = info +
+    `<div class="meta" style="margin-top:6px">${esc((detail.problems || []).join(" "))}</div>
+     <div class="row" style="margin-top:8px">
+       <button class="primary" id="ariaPrepBtn">Prepare Aria recording</button>
+       <button id="ariaCancelBtn" class="hidden">Cancel</button>
+       <span class="meta" id="ariaPhase"></span></div>
+     <div class="meta" style="margin-top:6px">output: <span class="mono">${esc(ariaOutFor(dir))}</span></div>
+     <div id="ariaBanner"></div>`;
+  $("ariaPrepBtn").onclick = () => startAriaPrepare(dir);
+  $("ariaCancelBtn").onclick = () => {
+    if (ariaJob) fetch(`/api/export/${ariaJob}/cancel`, { method: "POST" });
+  };
+}
+async function startAriaPrepare(dir) {
+  const out = ariaOutFor(dir);
+  $("ariaPrepBtn").disabled = true;
+  $("ariaCancelBtn").classList.remove("hidden");
+  banner($("ariaBanner"), "", "");
+  let r;
+  try {
+    r = await jfetch("/api/aria/prepare", { method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dir, out_dir: out }) });
+  } catch (e) {
+    $("ariaPrepBtn").disabled = false;
+    $("ariaCancelBtn").classList.add("hidden");
+    banner($("ariaBanner"), "err", "Preparation refused: " + e.message);
+    return;
+  }
+  ariaJob = r.job_id;
+  ariaTimer = setInterval(async () => {
+    let d;
+    try { d = await jfetch("/api/export/" + ariaJob); }
+    catch (e) { return; }
+    $("ariaPhase").textContent = d.state === "running"
+      ? `${d.phase} — ${(100 * d.progress).toFixed(0)}%` : "";
+    if (d.state === "running") return;
+    clearInterval(ariaTimer); ariaTimer = null;
+    $("ariaPrepBtn").disabled = false;
+    $("ariaCancelBtn").classList.add("hidden");
+    if (d.state === "done") {
+      banner($("ariaBanner"), "ok",
+        "✓ prepared → " + d.manifest.output_directory + " — loading it now");
+      $("ariaPanel").classList.add("hidden");
+      loadRec(d.manifest.output_directory);
+    } else {
+      banner($("ariaBanner"), d.state === "cancelled" ? "warn" : "err",
+        (d.state === "cancelled" ? "Preparation cancelled" : "Preparation failed")
+        + " — " + (d.error || "unknown error")
+        + "\nSource archives and any valid cache are untouched; no partial "
+        + "artifact was published.");
+    }
+  }, 900);
+}
+
+/* ---------------- pipeline workbench integration ----------------
+   Same-tab only; never opens a browser tab. A handoff path is loaded
+   through the ordinary /api/load route, so path authorization and
+   recording intake validation apply exactly as for a manual choice. */
+const WB_Q = new URLSearchParams(location.search);
+const WB_HOME = WB_Q.get("home") || "http://127.0.0.1:8000/";
+$("pipelineHome").href = WB_HOME;
+function wbOfferNext(outDir) {
+  if (!outDir) return;
+  const a = $("wbNext");
+  a.href = WB_HOME.replace(/\/$/, "") + "/go?to=object_tracking&handoff="
+           + encodeURIComponent(outDir);
+  a.classList.remove("hidden");
+}
+if (WB_Q.get("handoff")) loadRec(WB_Q.get("handoff"));
+</script>
+</body>
+</html>

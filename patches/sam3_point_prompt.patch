@@ -1,0 +1,26 @@
+--- a/sam3/model/sam3_video_inference.py
++++ b/sam3/model/sam3_video_inference.py
+@@ -1377,7 +1377,7 @@
+             assert obj_id is not None, (
+                 "When points are provided, obj_id must be provided."
+             )
+-            return self.add_tracker_new_points(
++            out = self.add_tracker_new_points(
+                 inference_state,
+                 frame_idx,
+                 obj_id=obj_id,
+@@ -1386,6 +1386,14 @@
+                 rel_coordinates=rel_coordinates,
+                 use_prev_mem_frame=self.use_prev_mem_frame,
+             )
++            # LOCAL PATCH (gaze-object pipeline): unlike the SAM3 semantic path
++            # (_run_single_frame_inference marks the frame at line ~402), the tracker
++            # (SAM2-style point/obj_id) path never sets previous_stages_out for this
++            # frame, so a point-selected NEW object makes propagate_in_video ->
++            # _get_processing_order raise "No prompts are received on any frames".
++            # Mark it here so point-selected instances can be propagated.
++            inference_state["previous_stages_out"][frame_idx] = "_THIS_FRAME_HAS_OUTPUTS_"
++            return out
+         else:
+             # SAM3 prompts
+             return super().add_prompt(

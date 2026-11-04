@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gaze-Object Fusion — SAM3 gaze pipeline</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:#111418;color:#dfe5ec;font:14px/1.45 system-ui,sans-serif}
+.wrap{max-width:880px;margin:0 auto;padding:18px}
+h1{font-size:20px;margin:0 0 2px}
+h1 small{color:#8a94a3;font-weight:400;font-size:13px}
+h3{margin:0 0 8px;font-size:15px}
+.card{background:#191e24;border:1px solid #2a323c;border-radius:10px;padding:14px;margin-top:14px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+button{background:#242b34;color:#dfe5ec;border:1px solid #38424e;border-radius:7px;
+  padding:7px 14px;cursor:pointer;font:inherit}
+button:hover{background:#2c3540}
+button:disabled{opacity:.45;cursor:default}
+button.primary{background:#2f6fd6;border-color:#2f6fd6;color:#fff}
+button.primary:hover{background:#3d7de2}
+input[type=text]{background:#12161b;color:#dfe5ec;border:1px solid #38424e;
+  border-radius:7px;padding:7px 10px;font:inherit;flex:1;min-width:200px}
+.meta{color:#8a94a3;font-size:12.5px}
+.mono{font-family:ui-monospace,monospace;font-size:12.5px}
+.ok{color:#5ad17a}.bad{color:#ff7d7d}
+.banner{border-radius:7px;padding:8px 10px;margin-top:8px;font-size:13px}
+.banner.err{background:#3a1d1d;border:1px solid #6e2c2c;color:#ffb4b4;white-space:pre-wrap}
+.banner.good{background:#173123;border:1px solid #2b5c3f;color:#a9e9c0}
+.prog{height:8px;background:#242b34;border-radius:5px;overflow:hidden;margin-top:10px}
+.prog>div{height:100%;width:0;background:#2f6fd6;transition:width .3s}
+table{border-collapse:collapse;margin-top:8px;font-size:13px}
+td,th{border:1px solid #2a323c;padding:4px 10px;text-align:left}
+th{color:#8a94a3;font-weight:500}
+.dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.modal-back{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;
+  align-items:center;justify-content:center;z-index:50}
+.modal{background:#191e24;border:1px solid #2a323c;border-radius:10px;
+  width:min(720px,92vw);max-height:86vh;display:flex;flex-direction:column;padding:12px}
+.crumbs{font-size:12.5px;color:#8a94a3;margin:6px 0;word-break:break-all}
+.crumbs a{color:#7fb0f2;cursor:pointer;text-decoration:none}
+.entries{overflow:auto;border:1px solid #2a323c;border-radius:7px;min-height:200px}
+.entry{padding:6px 10px;cursor:pointer;display:flex;gap:8px;align-items:center}
+.entry:hover{background:#232a33}
+.entry.sel{background:#28405e}
+.badge{font-size:11px;border:1px solid #3b6, 1px;color:#5ad17a;border:1px solid #2b5c3f;
+  border-radius:9px;padding:1px 8px}
+.hidden{display:none}
+video{width:100%;border-radius:8px;margin-top:10px;background:#000}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="wbBar" style="margin-bottom:10px">
+    <a id="pipelineHome" href="http://127.0.0.1:8000/"
+       style="text-decoration:none;border:1px solid #38424e;border-radius:7px;
+              padding:5px 11px;font-size:13px;display:inline-block;color:#dfe5ec">← Pipeline Home</a>
+    <a id="wbNext" class="hidden" href="#"
+       style="text-decoration:none;border:1px solid #2f6fd6;background:#2f6fd6;
+              color:#fff;border-radius:7px;padding:5px 11px;font-size:13px;
+              display:inline-block;margin-left:6px">Pipeline Home with this result →</a>
+  </div>
+  <h1>Gaze-Object Fusion <small>fuse NEON gaze with tracked objects · build the demo video</small></h1>
+
+  <div class="card">
+    <h3>1 · Tracked-objects artifact</h3>
+    <div class="row">
+      <button class="primary" id="chooseBtn">Choose recording/artifact folder</button>
+      <input type="text" id="artPath" readonly placeholder="no artifact selected — pick a *_tracked_objects folder">
+    </div>
+    <div id="inspectPanel" class="meta" style="margin-top:8px"></div>
+    <div id="inspectBanner"></div>
+  </div>
+
+  <div class="card">
+    <h3>2 · Output location</h3>
+    <div class="row">
+      <button id="outBtn" disabled>Choose output parent folder</button>
+      <input type="text" id="outName" spellcheck="false" placeholder="output folder name">
+    </div>
+    <div class="meta" style="margin-top:6px">Destination: <b class="mono" id="outResolved">–</b></div>
+    <div id="outBanner"></div>
+  </div>
+
+  <div class="card">
+    <h3>3 · Build</h3>
+    <div class="row">
+      <button class="primary" id="buildBtn" disabled>Build gaze demo</button>
+      <button id="cancelBtn" class="hidden">Cancel</button>
+      <label><input type="checkbox" id="demoChk" checked> render demonstration video</label>
+    </div>
+    <div class="prog hidden" id="prog"><div id="progBar"></div></div>
+    <div class="meta" id="phase"></div>
+    <div id="buildBanner"></div>
+    <div id="summary" class="hidden">
+      <div class="banner good" id="summaryHead"></div>
+      <table id="objTable"></table>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="previewBtn">▶ Preview demo video</button>
+        <a id="openLink" target="_blank"><button>Open demo video in a new tab</button></a>
+        <span class="meta mono" id="outShown"></span>
+      </div>
+      <video id="player" class="hidden" controls preload="metadata"></video>
+    </div>
+  </div>
+
+  <div class="meta" style="margin-top:14px">
+    computation runs in a separate process via <span class="mono">python -m gaze_object_fusion</span> —
+    this page only orchestrates it. Server never writes into source recordings.
+  </div>
+</div>
+
+<div class="modal-back hidden" id="modalBack"><div class="modal">
+  <div class="row"><b id="modalTitle">Choose folder</b>
+    <span style="flex:1"></span><button id="modalClose">✕ close</button></div>
+  <nav class="crumbs" id="crumbs"></nav>
+  <div class="entries" id="entries"></div>
+  <div class="row" style="margin-top:10px">
+    <span class="meta" id="modalStatus" style="flex:1"></span>
+    <button class="primary" id="modalSelect" disabled>Select this folder</button>
+  </div>
+</div></div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let ART=null, INSPECT=null, OUTPARENT=null, JOB=null, MODE="art";
+
+function banner(el,cls,msg){el.innerHTML=msg?`<div class="banner ${cls}">${esc(msg)}</div>`:"";}
+
+/* ---------------- server-side folder chooser ---------------- */
+let curPath="", curSel=null;
+function openModal(mode){MODE=mode;
+  $("modalTitle").textContent = mode==="art" ? "Choose tracked-objects artifact"
+                                             : "Choose output parent folder";
+  $("modalBack").classList.remove("hidden"); browse(curPath||"");}
+$("modalClose").onclick=()=>$("modalBack").classList.add("hidden");
+$("modalBack").addEventListener("pointerdown",e=>{if(e.target===$("modalBack"))$("modalBack").classList.add("hidden");});
+async function browse(path){
+  const r=await fetch("/api/browse?path="+encodeURIComponent(path));
+  if(!r.ok){$("modalStatus").textContent=(await r.json()).detail||"browse failed";return;}
+  const d=await r.json(); curPath=d.path||""; curSel=null; $("modalSelect").disabled=(MODE==="art");
+  $("crumbs").innerHTML=(d.breadcrumbs||[]).map(b=>`<a data-p="${esc(b.path)}">${esc(b.name)}</a>`).join(" / ")
+    +(d.parent?` &nbsp;·&nbsp; <a data-p="${esc(d.parent)}">⬑ up</a>`:"");
+  $("crumbs").querySelectorAll("a").forEach(a=>a.onclick=()=>browse(a.dataset.p));
+  $("entries").innerHTML=(d.entries||[]).filter(e=>e.is_dir).map(e=>
+    `<div class="entry" data-p="${esc(e.path)}" data-t="${e.is_tracked_artifact?1:0}">
+       📁 ${esc(e.name)} ${e.is_tracked_artifact?'<span class="badge">tracked objects</span>':""}</div>`).join("")
+    ||'<div class="entry meta">no subfolders</div>';
+  $("entries").querySelectorAll(".entry[data-p]").forEach(el=>{
+    el.onclick=()=>{ $("entries").querySelectorAll(".entry").forEach(x=>x.classList.remove("sel"));
+      el.classList.add("sel"); curSel=el.dataset.p;
+      $("modalSelect").disabled = MODE==="art" ? el.dataset.t!=="1" : false; };
+    el.ondblclick=()=>browse(el.dataset.p);
+  });
+  $("modalStatus").textContent = MODE==="art"
+    ? "double-click to enter folders; select a folder with the “tracked objects” badge"
+    : "double-click to enter folders; Select uses the highlighted folder (or the current one)";
+}
+$("modalSelect").onclick=()=>{
+  const chosen=curSel||curPath;
+  $("modalBack").classList.add("hidden");
+  if(MODE==="art") loadArtifact(chosen); else setOutParent(chosen);
+};
+$("chooseBtn").onclick=()=>openModal("art");
+$("outBtn").onclick=()=>openModal("out");
+
+/* ---------------- artifact discovery + validation ---------------- */
+async function loadArtifact(path){
+  const r=await fetch("/api/inspect?path="+encodeURIComponent(path));
+  const d=await r.json();
+  if(!r.ok){banner($("inspectBanner"),"err",d.detail||"inspect failed");return;}
+  ART=path; INSPECT=d; $("artPath").value=path;
+  const a=d.artifact||{};
+  const objRows=(a.objects||[]).map(o=>
+    `<span style="margin-right:14px"><span class="dot" style="background:${esc(o.color||"#888")}"></span>${esc(o.name)} <span class="meta mono">${esc(o.object_id)} · ${esc(o.review_status)}</span></span>`).join("");
+  $("inspectPanel").innerHTML = d.artifact ? `
+    artifact <span class="mono">${esc(a.artifact_id||"?")}</span> ·
+    ${a.n_frames} frames (${esc(a.size)}) · ${a.table_rows} track rows ·
+    validation <b class="${a.validation_ok?"ok":"bad"}">${a.validation_ok?"all ok":"NOT ok"}</b> ·
+    gaze ${d.gaze&&d.gaze.rows!=null?`<b class="ok">${d.gaze.rows} samples</b>`:"<b class='bad'>?</b>"}
+    · parent trim ${d.parent&&d.parent.resolvable?'<b class="ok">resolvable</b>':'<b class="bad">missing</b>'}<br>${objRows}`:"";
+  if(d.ok){banner($("inspectBanner"),"good","Ready to fuse. Choose an output location (a default is prefilled).");
+    const def=d.default_out; OUTPARENT=def.substring(0,def.lastIndexOf("/"));
+    $("outName").value=def.split("/").pop(); $("outBtn").disabled=false; refreshOut();}
+  else banner($("inspectBanner"),"err","Cannot fuse this folder:\n- "+d.problems.join("\n- "));
+}
+
+/* ---------------- output ---------------- */
+function setOutParent(p){OUTPARENT=p; refreshOut();}
+$("outName").oninput=()=>refreshOut();
+async function refreshOut(){
+  if(!OUTPARENT||!$("outName").value.trim()){$("outResolved").textContent="–";$("buildBtn").disabled=true;return;}
+  const full=OUTPARENT.replace(/\/+$/,"")+"/"+$("outName").value.trim();
+  const r=await fetch(`/api/out_check?artifact=${encodeURIComponent(ART)}&path=${encodeURIComponent(full)}`);
+  const d=await r.json(); $("outResolved").textContent=d.resolved;
+  let problem=null;
+  if(!d.authorized)problem="destination outside the allowed roots: "+d.reason;
+  else if(d.exists)problem="destination already exists — pick a new name (existing outputs are never overwritten)";
+  else if(d.inside_source)problem="destination must be outside the artifact folder";
+  banner($("outBanner"),problem?"err":"good",problem||"Destination is available.");
+  $("buildBtn").disabled=!!problem||!INSPECT||!INSPECT.ok;
+}
+
+/* ---------------- build ---------------- */
+$("buildBtn").onclick=async()=>{
+  const full=OUTPARENT.replace(/\/+$/,"")+"/"+$("outName").value.trim();
+  banner($("buildBanner"),"",""); $("summary").classList.add("hidden");
+  const r=await fetch("/api/build",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({artifact:ART,out:full,demo:$("demoChk").checked})});
+  const d=await r.json();
+  if(!r.ok){banner($("buildBanner"),"err",d.detail||"build refused");return;}
+  JOB=d.job_id; $("buildBtn").disabled=true; $("cancelBtn").classList.remove("hidden");
+  $("prog").classList.remove("hidden"); poll();
+};
+$("cancelBtn").onclick=()=>{if(JOB)fetch(`/api/build/${JOB}/cancel`,{method:"POST"});};
+async function poll(){
+  if(!JOB)return;
+  const r=await fetch("/api/build/"+JOB); const d=await r.json();
+  $("progBar").style.width=(d.progress*100).toFixed(1)+"%";
+  $("phase").textContent=d.phase||"";
+  if(d.state==="running"){setTimeout(poll,700);return;}
+  $("cancelBtn").classList.add("hidden"); $("buildBtn").disabled=false;
+  if(d.state!=="done"){banner($("buildBanner"),"err",d.error||d.state);return;}
+  showSummary(d);
+}
+function showSummary(d){
+  const s=d.summary, c=s.counts;
+  $("summary").classList.remove("hidden");
+  $("summaryHead").textContent=`✓ published ${s.published} — ${c.samples_total} gaze samples, `
+    +`${c.samples_assigned} assigned, ${c.samples_with_hits} on objects, `
+    +`${c.frames_with_cursor}/${c.frames_total} frames with cursor`
+    +(s.demo.present?`, demo ${s.demo.frames} frames (max PTS dev ${s.demo.max_pts_dev_ms} ms, audio ${s.demo.audio?"yes":"no"})`:", no demo video");
+  $("objTable").innerHTML="<tr><th>object</th><th>id</th><th>frames tracked</th><th>samples as primary</th><th>samples hit (any)</th></tr>"
+    +c.per_object.map(o=>`<tr><td>${esc(o.object_name)}</td><td class="mono">${esc(o.object_id)}</td>
+      <td>${o.frames_tracked}</td><td>${o.samples_primary}</td><td>${o.samples_hit_any}</td></tr>`).join("");
+  const demoPath=d.out.replace(/\/+$/,"")+"/gaze_demo.mp4";
+  const url="/api/demo?path="+encodeURIComponent(demoPath);
+  $("outShown").textContent=d.out;
+  $("openLink").href=url;
+  $("previewBtn").onclick=()=>{const v=$("player");v.src=url;v.classList.remove("hidden");v.play();};
+  const hasDemo=s.demo&&s.demo.present;
+  $("previewBtn").disabled=!hasDemo; $("openLink").style.display=hasDemo?"":"none";
+  wbOfferNext(d.out);
+}
+
+/* ---------------- pipeline workbench integration ----------------
+   Same-tab only. A handoff path goes through the ordinary /api/inspect
+   route, so path authorization and tracked-artifact validation apply
+   exactly as they do for a manually chosen folder. */
+const WB_Q=new URLSearchParams(location.search);
+const WB_HOME=WB_Q.get("home")||"http://127.0.0.1:8000/";
+$("pipelineHome").href=WB_HOME;
+function wbOfferNext(outDir){
+  if(!outDir)return;
+  const a=$("wbNext");
+  a.href=WB_HOME.replace(/\/$/,"")+"/go?to=home&slot=fusion_output&handoff="
+    +encodeURIComponent(outDir);
+  a.classList.remove("hidden");
+}
+if(WB_Q.get("handoff"))loadArtifact(WB_Q.get("handoff"));
+</script>
+</body>
+</html>

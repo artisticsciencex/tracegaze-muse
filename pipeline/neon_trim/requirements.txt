@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+av
+imageio-ffmpeg
+numpy
+pytest
