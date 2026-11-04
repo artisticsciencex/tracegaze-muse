@@ -1,0 +1,59 @@
+{
+  "provider": "meta-model-api",
+  "endpoint": "/chat/completions",
+  "base_url": "https://api.meta.ai/v1",
+  "requested_model": "muse-spark-1.3",
+  "returned_model": "muse-spark-1.3",
+  "response_id": "chatcmpl-01a1a7ba-e107-7106-a277-3f8f08936ff5",
+  "finish_reason": "stop",
+  "usage": {
+    "completion_tokens": 15328,
+    "prompt_tokens": 52249,
+    "total_tokens": 67577,
+    "completion_tokens_details": {
+      "reasoning_tokens": 11591
+    },
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "request_parameters": {
+    "model": "muse-spark-1.3",
+    "reasoning_effort": "high",
+    "max_completion_tokens": 32000,
+    "seed": 7
+  },
+  "response_format": {
+    "type": "json_schema",
+    "name": "tracegaze_findings",
+    "strict": true
+  },
+  "request_sha256": "e1ec8768d7a24102557c076ca286f9e106f74507fab1232b74908867a35ec835",
+  "started_utc": "2026-11-04T18:00:52+00:00",
+  "http_status": 200,
+  "elapsed_s": 152.501,
+  "response_headers": {
+    "content-type": "application/json",
+    "x-ratelimit-remaining-requests": "3000",
+    "x-ratelimit-remaining-tokens": "4000000",
+    "x-request-id": "499135f8-7512-48de-9599-9999dc0ac3a4",
+    "date": "Wed, 04 Nov 2026 18:03:24 GMT"
+  },
+  "url": "https://api.meta.ai/v1/chat/completions",
+  "package_sha256": "f32bcc2ddf9a35795274a913702586f066e7b47dccbd1b9ba158cd4b0cc8938b",
+  "frames_sha256": {
+    "fr_0010": "8c4b3795c3950d68efe5626b0b76f4230bf6a2c50f7c2f2d0bc0ddfda43bf69b",
+    "fr_0030": "1ca3d924d7cd690e16b9ae5961f590648fc61545c3229c0b82804da45d196859",
+    "fr_0134": "41c9b41f9a88828caa2c92d0f666c56447198967e592bc2df9ad486445062745",
+    "fr_0164": "3cb19fdb64927d9e0f04578d1b332acf1e81573d520feea7d213a6b672bb653e",
+    "fr_0196": "a373958f3059d909f5df64e645f6ae75e5a8a5fa614f44832ca48e1f10c8f72e",
+    "fr_0308": "2795b8ee133e7004a4a4358f14160b2eac2a05e71fd2293f3d0ce83647e5afa1",
+    "fr_0332": "708bc9763a20451822ceb133674674bce6b24c7d02949b1e09ec27aa84db21a2",
+    "fr_0366": "61889be079492e1f56b38117d616fdb269579d23eed4cf5498d8aa4bfc0f0a04",
+    "fr_0394": "c020215f9953013427240562c5d412202d91df80000f3b5a78de606d2361d7c5",
+    "fr_0422": "e8e219f9756656aec8484d5ca61751cb8098c061ba7356bbc8ff01cf43f3a446",
+    "fr_0566": "218a4e5f6ce6b949e5fb404ea939ba71a2a7dcd8ff68438fbe35caf2f22e609b",
+    "fr_0594": "754f46c6f52c90df217ce09b9f78d5acc460835849ff8cab424c82472a116ae5"
+  },
+  "schema_sha256": "c1825c22c28d2ca713f2c4c614bea510c8048ff90db00ee105c880da5bd34831"
+}

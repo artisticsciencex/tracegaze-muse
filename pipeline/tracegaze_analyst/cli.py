@@ -10,6 +10,8 @@ from .baseline import make_baseline_response
 from .ollama import analyze_local
 from .packet import write_packet
 from .render import render_report
+from .support_cli import add_commands as add_support_commands
+from .support_cli import run as run_support
 from .validate import validate_response
 
 
@@ -35,9 +37,12 @@ def main(argv=None) -> int:
     v.add_argument("--packet", required=True)
     v.add_argument("--response", required=True)
     v.add_argument("--out", required=True)
+    add_support_commands(sub)
     args = ap.parse_args(argv)
 
     try:
+        if args.command not in ("prepare", "baseline", "analyze-local", "validate"):
+            return run_support(args)
         if args.command == "prepare":
             packet = write_packet(args.trace, args.question, args.out)
             print(f"prepared {len(packet['facts'])} facts, {len(packet['episodes'])} episodes, "

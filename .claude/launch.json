@@ -1,0 +1,53 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "workbench",
+      "runtimeExecutable": "~/.venvs/neon-trim/bin/python",
+      "runtimeArgs": [
+        "pipeline/workbench/server.py",
+        "--port",
+        "8000",
+        "--root",
+        "data"
+      ],
+      "port": 8000
+    },
+    {
+      "name": "neon-trim",
+      "runtimeExecutable": "~/.venvs/neon-trim/bin/python",
+      "runtimeArgs": [
+        "pipeline/neon_trim/server.py",
+        "--port",
+        "8001",
+        "--root",
+        "data"
+      ],
+      "port": 8001
+    },
+    {
+      "name": "object-tracking",
+      "runtimeExecutable": "~/.venvs/neon-trim/bin/python",
+      "runtimeArgs": [
+        "pipeline/object_tracking/server.py",
+        "--port",
+        "8002",
+        "--root",
+        "data"
+      ],
+      "port": 8002
+    },
+    {
+      "name": "gaze-fusion",
+      "runtimeExecutable": "~/.venvs/neon-trim/bin/python",
+      "runtimeArgs": [
+        "pipeline/gaze_object_fusion/server.py",
+        "--port",
+        "8003",
+        "--root",
+        "data"
+      ],
+      "port": 8003
+    }
+  ]
+}

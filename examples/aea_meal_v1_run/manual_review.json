@@ -1,0 +1,26 @@
+{
+  "reviewer": "Claude (coding assistant) — not a domain expert or member of the study team; to be confirmed by a researcher",
+  "date": "2026-11-05",
+  "scope": "Each finding read against the 12 package frames (viewed at full resolution), the deterministic package, boundary_proximity.json and the episode table. Checks whether evidence text is supported and whether interpretations overreach.",
+  "findings": {
+    "f1_sustained_eating_focus": {
+      "verdict": "supported",
+      "notes": "All 13 copied quantities match the package. fr_0164, fr_0394 and fr_0422 show the wearer's fork over the teal plate with the ring on the plate, and the partner using a utensil over the green plate, as stated. The limitation correctly cites that 55 of 92 dining-table samples are boundary-near (vs 27 of 149 for the wearer's plate), so table time is the boundary-sensitive part of this pattern. The interpretation (ordinary shared eating) is hedged with two reasonable alternatives."
+    },
+    "f2_opening_settling": {
+      "verdict": "partially supported",
+      "notes": "Quantities and frame descriptions are accurate: in fr_0010 the ring is on the wearer's fingers resting on the napkin (an untracked hand, hence 'no accepted tracked-mask hit'); in fr_0030 the partner holds a phone up. Overreach: the title says 'before eating' and the interpretation says 'before eating begins', but the clip starts 35.45 s into the recording and the frames do not show whether eating had started. Muse also missed a visible change that bears on 'settling': the partner is standing at the left of the table in fr_0010 and seated in fr_0030. The hand at the left edge of fr_0010 is plausibly the partner's but this is not certain. The alternative that no-hit gaze fell on the wearer's own untracked hand is correct and is the most useful point in this finding."
+    },
+    "f3_switching_with_edge_effects": {
+      "verdict": "partially supported",
+      "notes": "The measured part is correct (iv_03: 15 of 24 samples boundary-near, 10 single-sample episodes; iv_05: 15 of 28, 4 single-sample episodes) and caution about edge effects is warranted. Overreach: the interpretation says the switching 'most plausibly reflects gaze near overlapping mask edges during head and view movement'. Head movement is not measured in the package, 9 of 24 (iv_03) and 13 of 28 (iv_05) samples are not boundary-near, and two of the four cited frames show genuine changes in where the wearer looked: fr_0332 toward the partner's face and fork, fr_0566 toward the window (assigned no-hit, not near any mask). A better reading is a mixture of real short looks (partner, window) and boundary-sensitive flips between plate, table and partner's plate. The validator did not catch 'head and view movement' because its fragment list only contains the exact phrase 'head movement'."
+    }
+  },
+  "general": [
+    "No finding forces a difficulty narrative; all three conclude that this clip does not evidence a support opportunity, which is defensible for an ordinary shared meal with no visible difficulty.",
+    "Evidence text contains no construct or personal-attribute language; the partner is described neutrally and no age, health or identity is inferred.",
+    "The answer summary repeats the f2 overreach ('consistent with settling at the table') and is not split by evidence type; read it as Muse's synthesis, not as verified evidence.",
+    "Recurring limitation across findings: hands are not tracked, so gaze on the wearer's own hands is counted as 'no accepted tracked-mask hit'.",
+    "Attempt 1 (chatcmpl-01a1a7b4, reasoning medium) returned one verified finding only; attempt 2 (reasoning high, 16k output cap) returned unparseable JSON that was not kept; this attempt 3 (reasoning high, 32k cap) is the one shown."
+  ]
+}

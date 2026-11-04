@@ -1,0 +1,57 @@
+{
+  "baseline_ok": true,
+  "cases": [
+    {
+      "case": "invalid frame reference",
+      "detail": "finding 0: frame_ids[0] -> fr_9999",
+      "detected": true,
+      "new_problems": [
+        "unknown frame_ids: ['fr_9999']",
+        "visible_observations[0]: frame 'fr_0164' not listed in frame_ids"
+      ]
+    },
+    {
+      "case": "invalid interval reference",
+      "detail": "finding 0: + iv_99",
+      "detected": true,
+      "new_problems": [
+        "unknown interval_ids: ['iv_99']"
+      ]
+    },
+    {
+      "case": "altered quantity",
+      "detail": "finding 0: session.supported_duration_s -> 56.725",
+      "detected": true,
+      "new_problems": [
+        "quantities[0]: 56.725 'seconds' does not match session.supported_duration_s = 37.75 'seconds'"
+      ]
+    },
+    {
+      "case": "untraceable number in prose",
+      "detail": "finding 0: + '99.9 s'",
+      "detected": true,
+      "new_problems": [
+        "statement: number '99.9' is not traceable to the finding's cited evidence"
+      ]
+    },
+    {
+      "case": "construct language in evidence text",
+      "detail": "finding 0: + 'appears confused'",
+      "detected": true,
+      "new_problems": [
+        "statement: construct word 'confused' belongs in interpretation, not evidence"
+      ]
+    },
+    {
+      "case": "altered package fact",
+      "detail": "object.obj_0027.total_attention_s -> 16.9 (package only)",
+      "detected": true,
+      "new_problems": [
+        "quantities[1]: 14.9 'seconds' does not match object.obj_0027.total_attention_s = 16.9 'seconds'",
+        "statement: number '14.9' is not traceable to the finding's cited evidence",
+        "1 package facts do not re-derive from the trace files"
+      ]
+    }
+  ],
+  "all_detected": true
+}

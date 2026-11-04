@@ -1,0 +1,23 @@
+{
+  "question": "How did the person's gaze and visible activity unfold, which moments deserve closer examination, and what might those moments imply for designing assistance?",
+  "context": {
+    "example_label": "engineering example — not an older-adult recording",
+    "task_context": {
+      "dataset": "Aria Everyday Activities 1.0.0 (Meta Reality Labs Research), recording loc4_script3_seq4_rec1",
+      "dataset_task_label": "AEA script 3 (the only task label in the local metadata)",
+      "activity_description": "unknown — not supplied; describe only what the frames show",
+      "clip": "source RGB frames 709-1463 (35.45-73.15 s of the recording), 37.75 s",
+      "object_labels": "assigned by the researcher during TraceGaze object review, not by the dataset",
+      "purpose": "retrospective analysis for researchers studying everyday activities and designing assistance"
+    },
+    "participant_context": {
+      "role": "camera wearer (Project Aria glasses)",
+      "age": "unknown",
+      "older_adult": "unknown",
+      "health_or_impairment": "unknown",
+      "familiarity_with_task": "unknown",
+      "other_people": "one person, labelled 'task partner' by the researcher",
+      "policy": "Do not infer age, gender, health, identity or other personal attributes from appearance (AEA licence and study policy)."
+    }
+  }
+}

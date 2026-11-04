@@ -1,0 +1,13 @@
+# Pipeline, GUIs, analyst and dashboard (~/.venvs/neon-trim). Versions as tested.
+numpy==2.5.1
+pandas==3.0.5
+pyarrow==25.0.0
+av==18.0.0
+opencv-python-headless==5.0.0.93
+pycocotools==2.0.11
+pillow==12.3.0
+imageio-ffmpeg==0.6.0
+fastapi==0.141.1
+uvicorn==0.52.1
+httpx==0.28.1
+pytest==9.1.1

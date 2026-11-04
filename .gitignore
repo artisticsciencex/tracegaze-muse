@@ -1,0 +1,28 @@
+# credentials and local configuration
+.env
+.env.*
+!.env.example
+.claude/*
+!.claude/launch.json
+# recordings, dataset copies and generated artifacts (never commit)
+data/
+out/
+neon-data/
+*.vrs
+*_tracked_objects/
+*_gaze_fusion*/
+*_prepared_aria/
+*_trim_f*/
+demo_exports/
+demo_work/
+# model weights and vendored third-party code
+sam3/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+# python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/

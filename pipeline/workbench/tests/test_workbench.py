@@ -7,6 +7,7 @@ standalone-usability tests at the bottom.
 """
 
 import json
+import os
 import socket
 import subprocess
 import sys
@@ -96,7 +97,8 @@ def test_specs_come_from_launch_json_not_guessed():
     by_name = {c["name"]: c for c in launch["configurations"]}
     for key, spec in specs.items():
         conf = by_name[spec.launch_name]
-        assert spec.cmd() == [conf["runtimeExecutable"], *conf["runtimeArgs"]]
+        assert spec.cmd() == [os.path.expanduser(conf["runtimeExecutable"]),
+                              *conf["runtimeArgs"]]
         assert spec.port == conf["port"]
     assert [specs[k].port for k in wb_config.ORDER] == [8001, 8002, 8003]
 

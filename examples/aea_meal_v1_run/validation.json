@@ -1,0 +1,481 @@
+{
+  "ok": true,
+  "meaning": "references_verified = cited IDs exist, copied numbers match the deterministic package, evidence text avoids construct and personal-attribute language. It does not establish that an interpretation is correct.",
+  "summary": {
+    "findings": 3,
+    "references_verified": 3,
+    "needs_review": 0
+  },
+  "global_problems": [],
+  "findings": [
+    {
+      "finding_id": "f1_sustained_eating_focus",
+      "status": "references_verified",
+      "errors": [],
+      "warnings": [],
+      "quantity_checks": [
+        {
+          "fact_id": "session.supported_duration_s",
+          "claimed": 37.75,
+          "claimed_unit": "seconds",
+          "deterministic": 37.75,
+          "unit": "seconds",
+          "match": true
+        },
+        {
+          "fact_id": "object.obj_0027.total_attention_s",
+          "claimed": 14.9,
+          "claimed_unit": "seconds",
+          "deterministic": 14.9,
+          "unit": "seconds",
+          "match": true
+        },
+        {
+          "fact_id": "object.obj_0027.share_of_supported_time",
+          "claimed": 0.395,
+          "claimed_unit": "proportion",
+          "deterministic": 0.395,
+          "unit": "proportion",
+          "match": true
+        },
+        {
+          "fact_id": "object.obj_0018.total_attention_s",
+          "claimed": 9.2,
+          "claimed_unit": "seconds",
+          "deterministic": 9.2,
+          "unit": "seconds",
+          "match": true
+        },
+        {
+          "fact_id": "object.obj_0018.share_of_supported_time",
+          "claimed": 0.244,
+          "claimed_unit": "proportion",
+          "deterministic": 0.244,
+          "unit": "proportion",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_02.duration_s",
+          "claimed": 4.6,
+          "claimed_unit": "seconds",
+          "deterministic": 4.6,
+          "unit": "seconds",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_02.target.obj_0027.time_s",
+          "claimed": 3.3,
+          "claimed_unit": "seconds",
+          "deterministic": 3.3,
+          "unit": "seconds",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_04.duration_s",
+          "claimed": 4.1,
+          "claimed_unit": "seconds",
+          "deterministic": 4.1,
+          "unit": "seconds",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_04.target.obj_0027.time_s",
+          "claimed": 2.8,
+          "claimed_unit": "seconds",
+          "deterministic": 2.8,
+          "unit": "seconds",
+          "match": true
+        },
+        {
+          "fact_id": "object.obj_0027.boundary_near_sample_count",
+          "claimed": 27,
+          "claimed_unit": "samples",
+          "deterministic": 27,
+          "unit": "samples",
+          "match": true
+        },
+        {
+          "fact_id": "object.obj_0027.sample_count",
+          "claimed": 149,
+          "claimed_unit": "samples",
+          "deterministic": 149,
+          "unit": "samples",
+          "match": true
+        },
+        {
+          "fact_id": "object.obj_0018.boundary_near_sample_count",
+          "claimed": 55,
+          "claimed_unit": "samples",
+          "deterministic": 55,
+          "unit": "samples",
+          "match": true
+        },
+        {
+          "fact_id": "object.obj_0018.sample_count",
+          "claimed": 92,
+          "claimed_unit": "samples",
+          "deterministic": 92,
+          "unit": "samples",
+          "match": true
+        }
+      ],
+      "prose_numbers": [
+        {
+          "field": "statement",
+          "token": "37.75",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "14.9",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "0.395",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "9.2",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "0.244",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "4.6",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "3.3",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "4.1",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "2.8",
+          "traceable": true
+        }
+      ]
+    },
+    {
+      "finding_id": "f2_opening_settling",
+      "status": "references_verified",
+      "errors": [],
+      "warnings": [],
+      "quantity_checks": [
+        {
+          "fact_id": "interval.iv_01.duration_s",
+          "claimed": 1.95,
+          "claimed_unit": "seconds",
+          "deterministic": 1.95,
+          "unit": "seconds",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_01.episode_count",
+          "claimed": 7,
+          "claimed_unit": "episodes",
+          "deterministic": 7,
+          "unit": "episodes",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_01.transition_count",
+          "claimed": 6,
+          "claimed_unit": "transitions",
+          "deterministic": 6,
+          "unit": "transitions",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_01.single_sample_episode_count",
+          "claimed": 3,
+          "claimed_unit": "episodes",
+          "deterministic": 3,
+          "unit": "episodes",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_01.target.__no_tracked_object__.time_s",
+          "claimed": 0.8,
+          "claimed_unit": "seconds",
+          "deterministic": 0.8,
+          "unit": "seconds",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_01.target.obj_0026.time_s",
+          "claimed": 0.55,
+          "claimed_unit": "seconds",
+          "deterministic": 0.55,
+          "unit": "seconds",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_01.target.obj_0018.time_s",
+          "claimed": 0.4,
+          "claimed_unit": "seconds",
+          "deterministic": 0.4,
+          "unit": "seconds",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_01.sample_count",
+          "claimed": 20,
+          "claimed_unit": "samples",
+          "deterministic": 20,
+          "unit": "samples",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_01.boundary_near_sample_count",
+          "claimed": 9,
+          "claimed_unit": "samples",
+          "deterministic": 9,
+          "unit": "samples",
+          "match": true
+        }
+      ],
+      "prose_numbers": [
+        {
+          "field": "statement",
+          "token": "1.95",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "7",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "6",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "3",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "0.8",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "0.55",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "0.4",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "20",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "9",
+          "traceable": true
+        }
+      ]
+    },
+    {
+      "finding_id": "f3_switching_with_edge_effects",
+      "status": "references_verified",
+      "errors": [],
+      "warnings": [],
+      "quantity_checks": [
+        {
+          "fact_id": "interval.iv_03.duration_s",
+          "claimed": 2.4,
+          "claimed_unit": "seconds",
+          "deterministic": 2.4,
+          "unit": "seconds",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_03.episode_count",
+          "claimed": 14,
+          "claimed_unit": "episodes",
+          "deterministic": 14,
+          "unit": "episodes",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_03.transition_count",
+          "claimed": 13,
+          "claimed_unit": "transitions",
+          "deterministic": 13,
+          "unit": "transitions",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_03.single_sample_episode_count",
+          "claimed": 10,
+          "claimed_unit": "episodes",
+          "deterministic": 10,
+          "unit": "episodes",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_03.sample_count",
+          "claimed": 24,
+          "claimed_unit": "samples",
+          "deterministic": 24,
+          "unit": "samples",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_03.boundary_near_sample_count",
+          "claimed": 15,
+          "claimed_unit": "samples",
+          "deterministic": 15,
+          "unit": "samples",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_05.duration_s",
+          "claimed": 2.8,
+          "claimed_unit": "seconds",
+          "deterministic": 2.8,
+          "unit": "seconds",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_05.episode_count",
+          "claimed": 11,
+          "claimed_unit": "episodes",
+          "deterministic": 11,
+          "unit": "episodes",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_05.transition_count",
+          "claimed": 10,
+          "claimed_unit": "transitions",
+          "deterministic": 10,
+          "unit": "transitions",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_05.single_sample_episode_count",
+          "claimed": 4,
+          "claimed_unit": "episodes",
+          "deterministic": 4,
+          "unit": "episodes",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_05.sample_count",
+          "claimed": 28,
+          "claimed_unit": "samples",
+          "deterministic": 28,
+          "unit": "samples",
+          "match": true
+        },
+        {
+          "fact_id": "interval.iv_05.boundary_near_sample_count",
+          "claimed": 15,
+          "claimed_unit": "samples",
+          "deterministic": 15,
+          "unit": "samples",
+          "match": true
+        },
+        {
+          "fact_id": "session.single_sample_episode_count",
+          "claimed": 31,
+          "claimed_unit": "episodes",
+          "deterministic": 31,
+          "unit": "episodes",
+          "match": true
+        }
+      ],
+      "prose_numbers": [
+        {
+          "field": "statement",
+          "token": "2.4",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "14",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "13",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "10",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "24",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "15",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "2.8",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "11",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "10",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "4",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "28",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "15",
+          "traceable": true
+        },
+        {
+          "field": "statement",
+          "token": "31",
+          "traceable": true
+        }
+      ]
+    }
+  ],
+  "rederivation": {
+    "checked": 220,
+    "mismatches": []
+  }
+}

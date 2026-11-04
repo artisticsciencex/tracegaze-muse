@@ -1,0 +1,425 @@
+{
+  "answer_summary": "The wearer and a partner shared a meal at a dining table with egg plates, drinks, and other items. Gaze-supported time stayed mainly on the wearer's own plate and the table surface while both used forks to eat, with repeated returns between plate and table. The opening shows the wearer's hand on a napkin and the partner holding a phone, consistent with settling at the table. Later dense switching aligns with many boundary-near and single-sample episodes and ordinary views of the partner eating and a brief glance away, so it should not be read as confusion or need. No moment in the supplied evidence shows difficulty that would motivate assistance.",
+  "findings": [
+    {
+      "alternative_explanations": [
+        "The concentration on the plate could reflect head-down camera direction rather than visual guidance of the fork.",
+        "Brief looks to the table surface could reflect monitoring the partner's actions or items on the table rather than the wearer's own eating."
+      ],
+      "episode_ids": [
+        "ep_00016",
+        "ep_00017",
+        "ep_00018",
+        "ep_00019",
+        "ep_00020",
+        "ep_00042",
+        "ep_00043",
+        "ep_00044",
+        "ep_00045"
+      ],
+      "evidence_type": "measured_pattern",
+      "fact_ids": [
+        "session.supported_duration_s",
+        "object.obj_0027.total_attention_s",
+        "object.obj_0027.share_of_supported_time",
+        "object.obj_0018.total_attention_s",
+        "object.obj_0018.share_of_supported_time",
+        "interval.iv_02.duration_s",
+        "interval.iv_02.target.obj_0027.time_s",
+        "interval.iv_04.duration_s",
+        "interval.iv_04.target.obj_0027.time_s",
+        "object.obj_0027.boundary_near_sample_count",
+        "object.obj_0027.sample_count",
+        "object.obj_0018.boundary_near_sample_count",
+        "object.obj_0018.sample_count"
+      ],
+      "finding_id": "f1_sustained_eating_focus",
+      "frame_ids": [
+        "fr_0164",
+        "fr_0394",
+        "fr_0422"
+      ],
+      "interpretation": "This pattern fits ordinary shared eating where gaze stays near the food being handled.",
+      "interval_ids": [
+        "iv_02",
+        "iv_04"
+      ],
+      "limitations": [
+        "For the wearer's plate 27 samples of 149 samples were boundary-near, while for the dining table 55 samples of 92 samples were boundary-near, so table assignments near plate edges should be read with caution. Gaze uses the general model and each frame shows only an instant, so gaze assignments were not reassigned."
+      ],
+      "object_ids": [
+        "obj_0027",
+        "obj_0018"
+      ],
+      "quantities": [
+        {
+          "fact_id": "session.supported_duration_s",
+          "unit": "seconds",
+          "value": 37.75
+        },
+        {
+          "fact_id": "object.obj_0027.total_attention_s",
+          "unit": "seconds",
+          "value": 14.9
+        },
+        {
+          "fact_id": "object.obj_0027.share_of_supported_time",
+          "unit": "proportion",
+          "value": 0.395
+        },
+        {
+          "fact_id": "object.obj_0018.total_attention_s",
+          "unit": "seconds",
+          "value": 9.2
+        },
+        {
+          "fact_id": "object.obj_0018.share_of_supported_time",
+          "unit": "proportion",
+          "value": 0.244
+        },
+        {
+          "fact_id": "interval.iv_02.duration_s",
+          "unit": "seconds",
+          "value": 4.6
+        },
+        {
+          "fact_id": "interval.iv_02.target.obj_0027.time_s",
+          "unit": "seconds",
+          "value": 3.3
+        },
+        {
+          "fact_id": "interval.iv_04.duration_s",
+          "unit": "seconds",
+          "value": 4.1
+        },
+        {
+          "fact_id": "interval.iv_04.target.obj_0027.time_s",
+          "unit": "seconds",
+          "value": 2.8
+        },
+        {
+          "fact_id": "object.obj_0027.boundary_near_sample_count",
+          "unit": "samples",
+          "value": 27
+        },
+        {
+          "fact_id": "object.obj_0027.sample_count",
+          "unit": "samples",
+          "value": 149
+        },
+        {
+          "fact_id": "object.obj_0018.boundary_near_sample_count",
+          "unit": "samples",
+          "value": 55
+        },
+        {
+          "fact_id": "object.obj_0018.sample_count",
+          "unit": "samples",
+          "value": 92
+        }
+      ],
+      "statement": "Across the supported duration of 37.75 seconds, accumulated gaze-supported time was 14.9 seconds on the egg plate (wearer) with a share of 0.395 proportion, and 9.2 seconds on the dining table with a share of 0.244 proportion. In one sustained interval of 4.6 seconds, gaze-supported time was 3.3 seconds on the wearer's plate, and in another sustained interval of 4.1 seconds, gaze-supported time was 2.8 seconds on the wearer's plate, with repeated transitions between table and plate.",
+      "support_opportunity": {
+        "description": "No difficulty or assistance need is evidenced in these sustained eating periods; activity appears completed with utensils and food present.",
+        "evidence_needed": "To consider assistance would need evidence of difficulty such as dropped food, prolonged inability to locate items, or wearer request, plus audio and hand tracking over longer meals.",
+        "status": "not_supported_by_evidence"
+      },
+      "title": "Sustained gaze-supported time on the wearer's plate while eating",
+      "uncertainty": "medium",
+      "visible_observations": [
+        {
+          "frame_id": "fr_0164",
+          "observation": "The wearer's hand holds a fork over a teal plate with scrambled eggs; a phone lies on the table; the partner sits across with a hand near the table and a utensil over a green plate; the green ring lies on the wearer's plate."
+        },
+        {
+          "frame_id": "fr_0394",
+          "observation": "The wearer's hand holds a fork over the teal plate; the partner holds a fork with food over the green plate; phones, mugs, fruit bowl and snack bags are on the table; the green ring lies on the wearer's plate."
+        },
+        {
+          "frame_id": "fr_0422",
+          "observation": "The wearer's hand holds a fork above the teal plate; the partner holds a utensil over the green plate; the green ring lies on the edge of the wearer's plate."
+        }
+      ]
+    },
+    {
+      "alternative_explanations": [
+        "The hand could be resting while the wearer looks around, with no arranging intent.",
+        "The no-hit gaze could be on the wearer's own hand which has no tracked mask, rather than indicating missing data or searching."
+      ],
+      "episode_ids": [
+        "ep_00001",
+        "ep_00002",
+        "ep_00003",
+        "ep_00004",
+        "ep_00005",
+        "ep_00006",
+        "ep_00007"
+      ],
+      "evidence_type": "visible_observation",
+      "fact_ids": [
+        "interval.iv_01.duration_s",
+        "interval.iv_01.episode_count",
+        "interval.iv_01.transition_count",
+        "interval.iv_01.single_sample_episode_count",
+        "interval.iv_01.target.__no_tracked_object__.time_s",
+        "interval.iv_01.target.obj_0026.time_s",
+        "interval.iv_01.target.obj_0018.time_s",
+        "interval.iv_01.sample_count",
+        "interval.iv_01.boundary_near_sample_count"
+      ],
+      "finding_id": "f2_opening_settling",
+      "frame_ids": [
+        "fr_0010",
+        "fr_0030"
+      ],
+      "interpretation": "This looks like settling at the table with the hand on the napkin before eating begins.",
+      "interval_ids": [
+        "iv_01"
+      ],
+      "limitations": [
+        "Gaze uses the general model and each frame shows only an instant. Gaze-to-object assignments were kept as supplied and were not reassigned even where the ring lies on unlabelled hands."
+      ],
+      "object_ids": [
+        "obj_0026",
+        "__no_tracked_object__",
+        "obj_0018"
+      ],
+      "quantities": [
+        {
+          "fact_id": "interval.iv_01.duration_s",
+          "unit": "seconds",
+          "value": 1.95
+        },
+        {
+          "fact_id": "interval.iv_01.episode_count",
+          "unit": "episodes",
+          "value": 7
+        },
+        {
+          "fact_id": "interval.iv_01.transition_count",
+          "unit": "transitions",
+          "value": 6
+        },
+        {
+          "fact_id": "interval.iv_01.single_sample_episode_count",
+          "unit": "episodes",
+          "value": 3
+        },
+        {
+          "fact_id": "interval.iv_01.target.__no_tracked_object__.time_s",
+          "unit": "seconds",
+          "value": 0.8
+        },
+        {
+          "fact_id": "interval.iv_01.target.obj_0026.time_s",
+          "unit": "seconds",
+          "value": 0.55
+        },
+        {
+          "fact_id": "interval.iv_01.target.obj_0018.time_s",
+          "unit": "seconds",
+          "value": 0.4
+        },
+        {
+          "fact_id": "interval.iv_01.sample_count",
+          "unit": "samples",
+          "value": 20
+        },
+        {
+          "fact_id": "interval.iv_01.boundary_near_sample_count",
+          "unit": "samples",
+          "value": 9
+        }
+      ],
+      "statement": "Interval iv_01 lasted 1.95 seconds with 7 episodes and 6 transitions, including 3 single-sample episodes. Gaze-supported time in the interval was 0.8 seconds with no accepted tracked-mask hit, 0.55 seconds on the napkin (wearer side), and 0.4 seconds on the dining table, from 20 samples with 9 samples boundary-near.",
+      "support_opportunity": {
+        "description": "Opening hand-on-napkin and table looks show normal settling; no error or hesitation is visible that would motivate assistance.",
+        "evidence_needed": "Video of hand actions with audio and task goal would be needed to distinguish arranging from other reasons for touching the napkin.",
+        "status": "not_supported_by_evidence"
+      },
+      "title": "Opening hand on napkin with split gaze before eating",
+      "uncertainty": "medium",
+      "visible_observations": [
+        {
+          "frame_id": "fr_0010",
+          "observation": "The wearer's hand with a watch rests palm down on a white napkin on the table; plates with scrambled eggs, mugs, and a box are on the table; the partner's hand is partly visible at the edge; the green ring lies on the wearer's fingers over the napkin."
+        },
+        {
+          "frame_id": "fr_0030",
+          "observation": "The wearer's hand touches a white napkin beside a teal plate with eggs and a fork; the partner sits across holding a phone up in a hand; the green ring lies on the middle of the table surface."
+        }
+      ]
+    },
+    {
+      "alternative_explanations": [
+        "Some looks toward the partner while the partner lifts a fork could be ordinary social monitoring during a shared meal.",
+        "The brief look toward the window could be a momentary glance away with no task relevance, which cannot be distinguished without audio and head-motion data."
+      ],
+      "episode_ids": [
+        "ep_00027",
+        "ep_00028",
+        "ep_00029",
+        "ep_00030",
+        "ep_00031",
+        "ep_00032",
+        "ep_00033",
+        "ep_00034",
+        "ep_00035",
+        "ep_00036",
+        "ep_00037",
+        "ep_00038",
+        "ep_00039",
+        "ep_00040",
+        "ep_00061",
+        "ep_00062",
+        "ep_00063",
+        "ep_00064",
+        "ep_00065",
+        "ep_00066",
+        "ep_00067",
+        "ep_00068",
+        "ep_00069",
+        "ep_00070",
+        "ep_00071"
+      ],
+      "evidence_type": "measured_pattern",
+      "fact_ids": [
+        "interval.iv_03.duration_s",
+        "interval.iv_03.episode_count",
+        "interval.iv_03.transition_count",
+        "interval.iv_03.single_sample_episode_count",
+        "interval.iv_03.sample_count",
+        "interval.iv_03.boundary_near_sample_count",
+        "interval.iv_05.duration_s",
+        "interval.iv_05.episode_count",
+        "interval.iv_05.transition_count",
+        "interval.iv_05.single_sample_episode_count",
+        "interval.iv_05.sample_count",
+        "interval.iv_05.boundary_near_sample_count",
+        "session.single_sample_episode_count"
+      ],
+      "finding_id": "f3_switching_with_edge_effects",
+      "frame_ids": [
+        "fr_0308",
+        "fr_0332",
+        "fr_0566",
+        "fr_0594"
+      ],
+      "interpretation": "The dense switching most plausibly reflects gaze near overlapping mask edges during head and view movement while eating together, not confusion or difficulty.",
+      "interval_ids": [
+        "iv_03",
+        "iv_05"
+      ],
+      "limitations": [
+        "Many samples in these intervals were boundary-near with another target within the proximity convention, and many episodes lasted a single gaze sample, so rapid changes may reflect edge effects rather than changes in what was looked at. One frame assigned to the partner fork also lists the partner and the no-hit region within the proximity convention, so that assignment is doubtful if viewed alone. Gaze uses the general model and each frame shows only an instant."
+      ],
+      "object_ids": [
+        "obj_0027",
+        "obj_0018",
+        "obj_0017",
+        "obj_0031",
+        "__no_tracked_object__",
+        "obj_0033"
+      ],
+      "quantities": [
+        {
+          "fact_id": "interval.iv_03.duration_s",
+          "unit": "seconds",
+          "value": 2.4
+        },
+        {
+          "fact_id": "interval.iv_03.episode_count",
+          "unit": "episodes",
+          "value": 14
+        },
+        {
+          "fact_id": "interval.iv_03.transition_count",
+          "unit": "transitions",
+          "value": 13
+        },
+        {
+          "fact_id": "interval.iv_03.single_sample_episode_count",
+          "unit": "episodes",
+          "value": 10
+        },
+        {
+          "fact_id": "interval.iv_03.sample_count",
+          "unit": "samples",
+          "value": 24
+        },
+        {
+          "fact_id": "interval.iv_03.boundary_near_sample_count",
+          "unit": "samples",
+          "value": 15
+        },
+        {
+          "fact_id": "interval.iv_05.duration_s",
+          "unit": "seconds",
+          "value": 2.8
+        },
+        {
+          "fact_id": "interval.iv_05.episode_count",
+          "unit": "episodes",
+          "value": 11
+        },
+        {
+          "fact_id": "interval.iv_05.transition_count",
+          "unit": "transitions",
+          "value": 10
+        },
+        {
+          "fact_id": "interval.iv_05.single_sample_episode_count",
+          "unit": "episodes",
+          "value": 4
+        },
+        {
+          "fact_id": "interval.iv_05.sample_count",
+          "unit": "samples",
+          "value": 28
+        },
+        {
+          "fact_id": "interval.iv_05.boundary_near_sample_count",
+          "unit": "samples",
+          "value": 15
+        },
+        {
+          "fact_id": "session.single_sample_episode_count",
+          "unit": "episodes",
+          "value": 31
+        }
+      ],
+      "statement": "Interval iv_03 lasted 2.4 seconds with 14 episodes and 13 transitions, including 10 single-sample episodes, from 24 samples with 15 samples boundary-near. Interval iv_05 lasted 2.8 seconds with 11 episodes and 10 transitions, including 4 single-sample episodes, from 28 samples with 15 samples boundary-near. Across the clip there were 31 single-sample episodes.",
+      "support_opportunity": {
+        "description": "Because rapid switching aligns with single-sample and boundary-near samples and frames show ordinary eating and a brief look away, there is no sign of a moment where assistance could help.",
+        "evidence_needed": "Stable gaze on an object combined with visible difficulty, verbal uncertainty, or repeated unsuccessful reaches would be needed, plus head-motion-corrected gaze and audio.",
+        "status": "not_supported_by_evidence"
+      },
+      "title": "Dense switching that warrants caution about edge effects",
+      "uncertainty": "high",
+      "visible_observations": [
+        {
+          "frame_id": "fr_0308",
+          "observation": "The teal plate with eggs and a fork is in the foreground with the green ring on the eggs; a phone lies beside the plate; the partner sits across holding a fork up in a hand."
+        },
+        {
+          "frame_id": "fr_0332",
+          "observation": "The view is tilted up showing the partner holding a fork near the mouth; the wearer's plate is at the bottom edge; the green ring lies near the fork tines by the partner's face."
+        },
+        {
+          "frame_id": "fr_0566",
+          "observation": "The view is tilted up toward curtained windows; the partner sits at the table with a hand near the green plate; cups, fruit bowl and snack bags are on the table; the wearer's plate with a fork is partly visible at the bottom; the green ring lies on the window curtain."
+        },
+        {
+          "frame_id": "fr_0594",
+          "observation": "The green ring lies on the wearer's teal plate with eggs; the wearer's hand holds a fork over the plate; the partner uses a fork over the green plate; phones, mugs and bowls are on the table."
+        }
+      ]
+    }
+  ],
+  "remaining_questions": [
+    "What was the task instruction and meal goal, and was any difficulty reported? Audio, task instructions, and wearer or partner reports would help.",
+    "What was said and how did heads and hands move during looks toward the partner and away? Synchronized audio, head tracking, and hand tracking would help.",
+    "How accurate was gaze at mask edges and on hands without masks? Calibration quality, accuracy bounds, and hand masks would help.",
+    "What happened outside this clip and over longer meals? Longer video and repeated meals would help."
+  ]
+}

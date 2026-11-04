@@ -9,6 +9,7 @@ inventing an interpreter or command line.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -135,6 +136,7 @@ def load_specs(launch_json: Path = None,
                 f"{launch_json}: no configuration named "
                 f"{meta['launch_name']!r} for stage {meta['title']!r}")
         exe = conf.get("runtimeExecutable")
+        exe = os.path.expanduser(exe) if exe else exe
         args = list(conf.get("runtimeArgs") or [])
         port = conf.get("port")
         if not exe or not args or not port:

@@ -2,6 +2,8 @@
 
 import shutil
 
+from pathlib import Path
+
 import pytest
 
 from object_tracking import intake
@@ -25,6 +27,8 @@ def test_classify_trimmed_artifact(tmp_path):
     assert intake.classify_folder(d) == "trimmed_artifact"
 
 
+@pytest.mark.skipif(not Path(NATIVE_FIXTURE).is_dir(),
+                    reason="needs a private NEON native recording")
 def test_classify_native_recording_real_fixture():
     assert intake.classify_folder(NATIVE_FIXTURE) == "native_recording"
 
@@ -89,6 +93,8 @@ def test_open_bundle_video_only(tmp_path):
     assert any("gaze unavailable" in w for w in b.warnings)
 
 
+@pytest.mark.skipif(not Path(NATIVE_FIXTURE).is_dir(),
+                    reason="needs a private NEON native recording")
 def test_open_bundle_native_requires_preparation():
     with pytest.raises(intake.IntakeError, match="preparation"):
         intake.open_bundle(NATIVE_FIXTURE)
